@@ -17,29 +17,22 @@
  * USA.
  */
 
-#ifndef OPENDLV_LOGIC_CFSD18_COGNITION_TRACK_HPP
-#define OPENDLV_LOGIC_CFSD18_COGNITION_TRACK_HPP
+#ifndef CFSD18_COGNITION_TRACK_HPP
+#define CFSD18_COGNITION_TRACK_HPP
 
-#include <opendavinci/odcore/base/module/DataTriggeredConferenceClientModule.h>
-#include <opendavinci/odcore/data/Container.h>
-#include <opendavinci/odcore/wrapper/Eigen.h>
-#include <opendavinci/odcore/base/Lock.h>
-
-#include <odvdopendlvstandardmessageset/GeneratedHeaders_ODVDOpenDLVStandardMessageSet.h>
+#include <opendlv-standard-message-set.hpp>
+#include <cluon-complete.hpp>
+#include <Eigen/Dense>
 #include <map>
 #include <chrono>
-namespace opendlv {
-namespace logic {
-namespace cfsd18 {
-namespace cognition {
 
-class Track : public odcore::base::module::DataTriggeredConferenceClientModule {
+class Track {
  public:
-  Track(int32_t const &, char **);
+  Track(std::map<std::string, std::string>);
   Track(Track const &) = delete;
   Track &operator=(Track const &) = delete;
   virtual ~Track();
-  virtual void nextContainer(odcore::data::Container &);
+  virtual void nextContainer(cluon::data::Envelope &);
 
  private:
   void setUp();
@@ -58,8 +51,8 @@ class Track : public odcore::base::module::DataTriggeredConferenceClientModule {
   float m_groundSpeed;
   bool m_newFrame;
   int m_objectId;
-  odcore::base::Mutex m_groundSpeedMutex;
-  odcore::base::Mutex m_surfaceMutex;
+  std::mutex m_groundSpeedMutex;
+  std::mutex m_surfaceMutex;
   std::map< double, std::vector<float> > m_surfaceFrame;
   std::map< double, std::vector<float> > m_surfaceFrameBuffer;
   uint64_t m_nSurfacesInframe;
@@ -68,10 +61,5 @@ class Track : public odcore::base::module::DataTriggeredConferenceClientModule {
   int m_lastObjectId;
   bool m_newId;
 };
-
-}
-}
-}
-}
 
 #endif

@@ -20,19 +20,10 @@
 #include <iostream>
 #include <cmath>
 
-#include <opendavinci/odcore/data/TimeStamp.h>
-#include <opendavinci/odcore/strings/StringToolbox.h>
-
 #include <thread>
 #include "track.hpp"
 
-namespace opendlv {
-namespace logic {
-namespace cfsd18 {
-namespace cognition {
-
-Track::Track(int32_t const &a_argc, char **a_argv) :
-  DataTriggeredConferenceClientModule(a_argc, a_argv, "logic-cfsd18-cognition-track"),
+Track::Track(std::map<std::string, std::string> commandlineArguments) :
   m_groundSpeed{0.0f},
   m_newFrame{true},
   m_objectId{1},
@@ -53,21 +44,21 @@ Track::~Track()
 {
 }
 
-void Track::nextContainer(odcore::data::Container &a_container)
+void Track::nextContainer(cluon::data::Envelope &a_container)
 {
-  if (a_container.getDataType() == opendlv::proxy::GroundSpeedReading::ID()) {
-    odcore::base::Lock lockGroundSpeed(m_groundSpeedMutex);
-    auto groundSpeed = a_container.getData<opendlv::proxy::GroundSpeedReading>();
-    m_groundSpeed = groundSpeed.getGroundSpeed();
+  if (a_container.dataType() == opendlv::proxy::GroundSpeedReading::ID()) {
+    std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
+    auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(a_container));
+    m_groundSpeed = groundSpeed.groundSpeed();
 
   }
 
-  if(a_container.getDataType() == opendlv::logic::perception::GroundSurfaceProperty::ID()){
+  if(a_container.dataType() == opendlv::logic::perception::GroundSurfaceProperty::ID()){
       //std::cout << "TRACK RECIEVED A SURFACE!" << std::endl;
   //    m_lastTimeStamp = a_container.getSampleTimeStamp();
-      auto surfaceProperty = a_container.getData<opendlv::logic::perception::GroundSurfaceProperty>();
-      int surfaceId = surfaceProperty.getSurfaceId();
-      auto nSurfacesInframe = surfaceProperty.getProperty();
+      auto surfaceProperty = cluon::extractMessage<opendlv::logic::perception::GroundSurfaceProperty>(std::move(a_container));
+      int surfaceId = surfaceProperty.surfaceId();
+      auto nSurfacesInframe = surfaceProperty.property();
 
       if (m_newFrame) { // If true, a frame has just been sent
         m_newFrame = false;
@@ -79,14 +70,14 @@ void Track::nextContainer(odcore::data::Container &a_container)
 
   }
 
-  if (a_container.getDataType() == opendlv::logic::perception::GroundSurfaceArea::ID()) {
+  if (a_container.dataType() == opendlv::logic::perception::GroundSurfaceArea::ID()) {
     int objectId;
     {
-    odcore::base::Lock lockSurface(m_surfaceMutex);
-      auto groundSurfaceArea = a_container.getData<opendlv::logic::perception::GroundSurfaceArea>();
-      objectId = groundSurfaceArea.getSurfaceId();
-      odcore::data::TimeStamp containerStamp = a_container.getReceivedTimeStamp();
-      double timeStamp = containerStamp.toMicroseconds(); // Save timeStamp for sorting purposes;
+    std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
+      auto groundSurfaceArea = cluon::extractMessage<opendlv::logic::perception::GroundSurfaceArea>(std::move(a_container));
+      objectId = groundSurfaceArea.surfaceId();
+      cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
+      double timeStamp = containerStamp.microseconds(); // Save timeStamp for sorting purposes;
       if (m_newId) { // TODO: does it need to be global? can it be initialized in another way?
         m_objectId = (objectId!=m_lastObjectId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
         //std::cout << "newId, m_objectId: " <<m_objectId <<std::endl;
@@ -95,14 +86,14 @@ void Track::nextContainer(odcore::data::Container &a_container)
       //std::cout << "objectId: " <<objectId <<std::endl;
       //std::cout << "m_objectId: " <<m_objectId <<std::endl;
       //std::cout << "m_lastObjectId: " <<m_lastObjectId <<std::endl;
-      float x1 = groundSurfaceArea.getX1(); //Unpack message
-      float y1 = groundSurfaceArea.getY1();
-      float x2 = groundSurfaceArea.getX2();
-      float y2 = groundSurfaceArea.getY2();
-      float x3 = groundSurfaceArea.getX3();
-      float y3 = groundSurfaceArea.getY3();
-      float x4 = groundSurfaceArea.getX4();
-      float y4 = groundSurfaceArea.getY4();
+      float x1 = groundSurfaceArea.x1(); //Unpack message
+      float y1 = groundSurfaceArea.y1();
+      float x2 = groundSurfaceArea.x2();
+      float y2 = groundSurfaceArea.y2();
+      float x3 = groundSurfaceArea.x3();
+      float y3 = groundSurfaceArea.y3();
+      float x4 = groundSurfaceArea.x4();
+      float y4 = groundSurfaceArea.y4();
       std::vector<float> v(4);
       v[0] = (x1+x2)/2.0f;
       v[1] = (y1+y2)/2.0f;
@@ -135,6 +126,7 @@ void Track::nextContainer(odcore::data::Container &a_container)
     auto wait = std::chrono::system_clock::now(); // Time point now
     std::chrono::duration<double> dur = wait-m_timeReceived; // Duration since last message recieved to m_surfaceFrame
     double duration = (m_objectId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
+// TODO: Fix commandlineArguments for all configuration stuff
     double receiveTimeLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.receiveTimeLimit");
 
     if (duration>receiveTimeLimit) { //Only for debug
@@ -155,7 +147,7 @@ void Track::nextContainer(odcore::data::Container &a_container)
       //std::cout << "duration: " <<duration <<std::endl;
       std::map< double, std::vector<float> > surfaceFrame;
       {
-      odcore::base::Lock lockSurface(m_surfaceMutex);
+      std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
         m_newFrame = true; // Allow for new surface property
         surfaceFrame = m_surfaceFrame; // Copy frame
         m_surfaceFrame = m_surfaceFrameBuffer; // Add buffer to new frame
@@ -248,11 +240,12 @@ void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
         std::cout << "ONE POINT signal recieved " << std::endl;
       }
       else { //Place equidistant points
+// TODO: Fix commandlineArguments for all configuration stuff
         float const distanceBetweenPoints = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.distanceBetweenPoints");
         bool const traceBack = getKeyValueConfiguration().getValue<bool>("logic-cfsd18-cognition-track.traceBack");
         Eigen::MatrixXf localPathCopy;
         if (traceBack){
-          RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
+          Eigenn::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
           localPathCopy.resize(localPath.rows()+1,2);
           localPathCopy.row(0) = firstPoint;
           localPathCopy.block(1,0,localPath.rows(),2) = localPath;
@@ -265,6 +258,7 @@ void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
     } //else Only one point remaining
   }
   //std::cout<<"localPath: "<<localPath<<"\n";
+// TODO: Fix commandlineArguments for all configuration stuff
   auto kv = getKeyValueConfiguration();
   float const previewTime = kv.getValue<float>("logic-cfsd18-cognition-track.previewTime");
   float const velocityLimit = kv.getValue<float>("logic-cfsd18-cognition-track.velocityLimit");
@@ -275,7 +269,7 @@ void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
   bool const sharp = kv.getValue<bool>("logic-cfsd18-cognition-track.RunSharp");
   float groundSpeedCopy;
   {
-    odcore::base::Lock lockGroundSpeed(m_groundSpeedMutex);
+    std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
     groundSpeedCopy = m_groundSpeed;
   }
   float previewDistance = std::abs(groundSpeedCopy)*previewTime;
@@ -304,6 +298,7 @@ void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
   float accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, velocityLimit, axLimitPositive, axLimitNegative, previewDistance, headingRequest, headingErrorDependency, mu, STOP);
 
 //std::cout << "Sending headingRequest: " << headingRequest << std::endl;
+// TODO: Fix sending messages with libcluon od4session
   //opendlv::logic::action::AimPoint o1;
   opendlv::proxy::GroundSteeringRequest o1;
   //o1.setAzimuthAngle(headingRequest);
@@ -426,6 +421,7 @@ Eigen::MatrixXf Track::placeEquidistantPoints(Eigen::MatrixXf oldPathPoints, boo
 } // End of placeEquidistantPoints
 
 float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
+// TODO: Fix commandlineArguments for all configuration stuff
   auto kv = getKeyValueConfiguration();
   int n = kv.getValue<int>("logic-cfsd18-cognition-track.nSharp");
   float K1 = kv.getValue<float>("logic-cfsd18-cognition-track.K1Sharp");
@@ -507,6 +503,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   float headingRequest;
   Eigen::Vector2f aimPoint(2);
   bool preSet = false;
+// TODO: Fix commandlineArguments for all configuration stuff
   bool const moveOrigin = getKeyValueConfiguration().getValue<bool>("logic-cfsd18-cognition-track.moveOrigin");
   if (moveOrigin && localPath.rows()>2) {
     // Move localPath to front wheel axis
@@ -577,6 +574,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   // Angle to aimpoint
   headingRequest = atan2(aimPoint(1),aimPoint(0));
   // Limit heading request due to physical limitations
+// TODO: Fix commandlineArguments for all configuration stuff
   float wheelAngleLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.wheelAngleLimit");
   if (headingRequest>=0) {
     headingRequest = std::min(headingRequest,wheelAngleLimit*3.14159265f/180.0f);
@@ -627,6 +625,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
 
   if ((!STOP) && (localPath.rows() > 2)){
     // Caluclate curvature of path
+// TODO: Fix commandlineArguments for all configuration stuff
     bool polyFit = getKeyValueConfiguration().getValue<bool>("logic-cfsd18-cognition-track.polyFit");
       if (polyFit){
         step = 0;
@@ -707,6 +706,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         }
       }
     }
+// TODO: Fix commandlineArguments for all configuration stuff
     float const wheelBase = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.wheelBase");
     float ay = powf(groundSpeedCopy,2)/(wheelBase/std::tan(std::abs(headingRequest)));
     if(brakeTime<=0.0f){
@@ -889,6 +889,7 @@ std::vector<float> Track::curvatureTriCircle(Eigen::MatrixXf localPath, int step
 
 std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: double check coordinate system, maybe switch x/y
   auto startPoly = std::chrono::system_clock::now();
+// TODO: Fix commandlineArguments for all configuration stuff
   int n = getKeyValueConfiguration().getValue<int>("logic-cfsd18-cognition-track.polynomialDegree");
   int pointsPerSegment =  getKeyValueConfiguration().getValue<int>("logic-cfsd18-cognition-track.pointsPerSegment");
   int i,j,segments,N;
@@ -1017,7 +1018,3 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: 
 } // end curvaturePolyFit
 
 
-} // end namespace
-}
-}
-}
