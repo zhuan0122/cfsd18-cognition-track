@@ -17,88 +17,61 @@
  * USA.
  */
 
-#ifndef OPENDLV_SIM_CFSD18_COGNITION_BLACKBOX_HPP
-#define OPENDLV_SIM_CFSD18_COGNITION_BLACKBOX_HPP
+#ifndef OPENDLV_LOGIC_CFSD18_COGNITION_TRACK_HPP
+#define OPENDLV_LOGIC_CFSD18_COGNITION_TRACK_HPP
 
-#include <opendlv-standard-message-set.hpp>
-#include <cluon-complete.hpp>
-#include <Eigen/Dense>
-#include <fstream>
-#include <iostream>
-#include <thread>
-#include <cmath>
-#include <iomanip>
-#include <sstream>
-#include <list>
-#include <vector>
-#include <algorithm>
-#include <string>
-#include "neat/neat.h"
-#include "neat/network.h"
-#include "neat/population.h"
-#include "neat/organism.h"
-#include "neat/genome.h"
-#include "neat/species.h"
+#include <opendavinci/odcore/base/module/DataTriggeredConferenceClientModule.h>
+#include <opendavinci/odcore/data/Container.h>
+#include <opendavinci/odcore/wrapper/Eigen.h>
+#include <opendavinci/odcore/base/Lock.h>
 
-class BlackBox {
+#include <odvdopendlvstandardmessageset/GeneratedHeaders_ODVDOpenDLVStandardMessageSet.h>
+#include <map>
+#include <chrono>
+namespace opendlv {
+namespace logic {
+namespace cfsd18 {
+namespace cognition {
+
+class Track : public odcore::base::module::DataTriggeredConferenceClientModule {
  public:
-  BlackBox(std::map<std::string, std::string>);
-  BlackBox(BlackBox const &) = delete;
-  BlackBox &operator=(BlackBox const &) = delete;
-  virtual ~BlackBox();
-  virtual void nextContainer(cluon::data::Envelope &);
+  Track(int32_t const &, char **);
+  Track(Track const &) = delete;
+  Track &operator=(Track const &) = delete;
+  virtual ~Track();
+  virtual void nextContainer(odcore::data::Container &);
 
  private:
   void setUp();
   void tearDown();
 
-  void initializeCollection();
-  void sortIntoSideArrays(Eigen::MatrixXd, int, int, int, int);
-  void generateSurfaces(Eigen::ArrayXXf, Eigen::ArrayXXf);
-  Eigen::MatrixXd Spherical2Cartesian(double, double, double);
+  void collectAndRun(std::map< double, std::vector<float> >);
+  Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
+  Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
+  std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
+  float driverModelSharp(Eigen::MatrixXf, float);
+  float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, float, bool);
+  std::vector<float> curvatureTriCircle(Eigen::MatrixXf, int);
+  std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
 
-  std::mutex m_stateMutex;
-  uint16_t m_cid;
-  float m_maxSteering;
-  float m_maxAcceleration;
-  float m_maxDeceleration;
-  float m_receiveTimeLimit;
-  float m_vx;
-  float m_vy;
-  float m_yawRate;
-  NEAT::Network *m_net;
+  /* Member variables */
+  float m_groundSpeed;
   bool m_newFrame;
-  bool m_directionOK;
-  bool m_distanceOK;
-  bool m_runOK;
-  std::map< double, float > m_directionFrame;
-  std::map< double, float > m_distanceFrame;
-  std::map< double, int > m_typeFrame;
-  std::map< double, float > m_directionFrameBuffer;
-  std::map< double, float > m_distanceFrameBuffer;
-  std::map< double, int > m_typeFrameBuffer;
-  int m_lastDirectionId;
-  int m_lastDistanceId;
-  int m_lastTypeId;
-  bool m_newDirectionId;
-  bool m_newDistanceId;
-  bool m_newTypeId;
-  std::chrono::time_point<std::chrono::system_clock> m_directionTimeReceived;
-  std::chrono::time_point<std::chrono::system_clock> m_distanceTimeReceived;
-  std::chrono::time_point<std::chrono::system_clock> m_typeTimeReceived;
-  uint64_t m_nConesInFrame;
-  int m_objectPropertyId;
-  int m_directionId;
-  int m_distanceId;
-  int m_typeId;
-  std::mutex m_directionMutex = {};
-  std::mutex m_distanceMutex = {};
-  std::mutex m_typeMutex = {};
+  int m_objectId;
+  odcore::base::Mutex m_groundSpeedMutex;
+  odcore::base::Mutex m_surfaceMutex;
+  std::map< double, std::vector<float> > m_surfaceFrame;
+  std::map< double, std::vector<float> > m_surfaceFrameBuffer;
+  uint64_t m_nSurfacesInframe;
   int m_surfaceId;
-
-  const double DEG2RAD = 0.017453292522222; // PI/180.0
-
+  std::chrono::time_point<std::chrono::system_clock> m_timeReceived;
+  int m_lastObjectId;
+  bool m_newId;
 };
 
+}
+}
+}
+}
 
 #endif
