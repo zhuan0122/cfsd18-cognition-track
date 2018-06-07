@@ -3299,7 +3299,7 @@ namespace argh
 
       std::stringbuf* rdbuf() const { return stream_.rdbuf(); }
 
-      // Check the state of the stream. 
+      // Check the state of the stream.
       // False when the most recent stream operation failed
       operator bool() const { return !!stream_; }
 
@@ -3458,7 +3458,7 @@ namespace argh
 
          // if 'name' is a pre-registered option, then the next arg cannot be a free parameter to it is skipped
          // otherwise we have 2 modes:
-         // PREFER_FLAG_FOR_UNREG_OPTION: a non-registered 'name' is determined a flag. 
+         // PREFER_FLAG_FOR_UNREG_OPTION: a non-registered 'name' is determined a flag.
          //                               The following value (the next arg) will be a free parameter.
          //
          // PREFER_PARAM_FOR_UNREG_OPTION: a non-registered 'name' is determined a parameter, the next arg
@@ -3593,7 +3593,7 @@ namespace argh
          auto optIt = params_.find(trim_leading_dashes(name));
          if (params_.end() != optIt)
             return string_stream(optIt->second);
-      }      
+      }
       std::ostringstream ostr;
       ostr << def_val;
       return string_stream(ostr.str()); // use default
@@ -3756,42 +3756,42 @@ class LIB_API TimeStamp {
         static int32_t ID();
         static const std::string ShortName();
         static const std::string LongName();
-        
+
         TimeStamp& seconds(const int32_t &v) noexcept;
         int32_t seconds() const noexcept;
-        
+
         TimeStamp& microseconds(const int32_t &v) noexcept;
         int32_t microseconds() const noexcept;
-        
+
 
         template<class Visitor>
         void accept(Visitor &visitor) {
             visitor.preVisit(ID(), ShortName(), LongName());
-            
+
             doVisit(1, std::move("int32_t"s), std::move("seconds"s), m_seconds, visitor);
-            
+
             doVisit(2, std::move("int32_t"s), std::move("microseconds"s), m_microseconds, visitor);
-            
+
             visitor.postVisit();
         }
 
         template<class PreVisitor, class Visitor, class PostVisitor>
         void accept(PreVisitor &&preVisit, Visitor &&visit, PostVisitor &&postVisit) {
             std::forward<PreVisitor>(preVisit)(ID(), ShortName(), LongName());
-            
+
             doTripletForwardVisit(1, std::move("int32_t"s), std::move("seconds"s), m_seconds, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(2, std::move("int32_t"s), std::move("microseconds"s), m_microseconds, preVisit, visit, postVisit);
-            
+
             std::forward<PostVisitor>(postVisit)();
         }
 
     private:
-        
+
         int32_t m_seconds{ 0 }; // field identifier = 1.
-        
+
         int32_t m_microseconds{ 0 }; // field identifier = 2.
-        
+
 };
 }}
 
@@ -3920,78 +3920,78 @@ class LIB_API Envelope {
         static int32_t ID();
         static const std::string ShortName();
         static const std::string LongName();
-        
+
         Envelope& dataType(const int32_t &v) noexcept;
         int32_t dataType() const noexcept;
-        
+
         Envelope& serializedData(const std::string &v) noexcept;
         std::string serializedData() const noexcept;
-        
+
         Envelope& sent(const cluon::data::TimeStamp &v) noexcept;
         cluon::data::TimeStamp sent() const noexcept;
-        
+
         Envelope& received(const cluon::data::TimeStamp &v) noexcept;
         cluon::data::TimeStamp received() const noexcept;
-        
+
         Envelope& sampleTimeStamp(const cluon::data::TimeStamp &v) noexcept;
         cluon::data::TimeStamp sampleTimeStamp() const noexcept;
-        
+
         Envelope& senderStamp(const uint32_t &v) noexcept;
         uint32_t senderStamp() const noexcept;
-        
+
 
         template<class Visitor>
         void accept(Visitor &visitor) {
             visitor.preVisit(ID(), ShortName(), LongName());
-            
+
             doVisit(1, std::move("int32_t"s), std::move("dataType"s), m_dataType, visitor);
-            
+
             doVisit(2, std::move("std::string"s), std::move("serializedData"s), m_serializedData, visitor);
-            
+
             doVisit(3, std::move("cluon::data::TimeStamp"s), std::move("sent"s), m_sent, visitor);
-            
+
             doVisit(4, std::move("cluon::data::TimeStamp"s), std::move("received"s), m_received, visitor);
-            
+
             doVisit(5, std::move("cluon::data::TimeStamp"s), std::move("sampleTimeStamp"s), m_sampleTimeStamp, visitor);
-            
+
             doVisit(6, std::move("uint32_t"s), std::move("senderStamp"s), m_senderStamp, visitor);
-            
+
             visitor.postVisit();
         }
 
         template<class PreVisitor, class Visitor, class PostVisitor>
         void accept(PreVisitor &&preVisit, Visitor &&visit, PostVisitor &&postVisit) {
             std::forward<PreVisitor>(preVisit)(ID(), ShortName(), LongName());
-            
+
             doTripletForwardVisit(1, std::move("int32_t"s), std::move("dataType"s), m_dataType, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(2, std::move("std::string"s), std::move("serializedData"s), m_serializedData, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(3, std::move("cluon::data::TimeStamp"s), std::move("sent"s), m_sent, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(4, std::move("cluon::data::TimeStamp"s), std::move("received"s), m_received, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(5, std::move("cluon::data::TimeStamp"s), std::move("sampleTimeStamp"s), m_sampleTimeStamp, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(6, std::move("uint32_t"s), std::move("senderStamp"s), m_senderStamp, preVisit, visit, postVisit);
-            
+
             std::forward<PostVisitor>(postVisit)();
         }
 
     private:
-        
+
         int32_t m_dataType{ 0 }; // field identifier = 1.
-        
+
         std::string m_serializedData{ ""s }; // field identifier = 2.
-        
+
         cluon::data::TimeStamp m_sent{  }; // field identifier = 3.
-        
+
         cluon::data::TimeStamp m_received{  }; // field identifier = 4.
-        
+
         cluon::data::TimeStamp m_sampleTimeStamp{  }; // field identifier = 5.
-        
+
         uint32_t m_senderStamp{ 0 }; // field identifier = 6.
-        
+
 };
 }}
 
@@ -4120,42 +4120,42 @@ class LIB_API PlayerCommand {
         static int32_t ID();
         static const std::string ShortName();
         static const std::string LongName();
-        
+
         PlayerCommand& command(const uint8_t &v) noexcept;
         uint8_t command() const noexcept;
-        
+
         PlayerCommand& seekTo(const float &v) noexcept;
         float seekTo() const noexcept;
-        
+
 
         template<class Visitor>
         void accept(Visitor &visitor) {
             visitor.preVisit(ID(), ShortName(), LongName());
-            
+
             doVisit(1, std::move("uint8_t"s), std::move("command"s), m_command, visitor);
-            
+
             doVisit(2, std::move("float"s), std::move("seekTo"s), m_seekTo, visitor);
-            
+
             visitor.postVisit();
         }
 
         template<class PreVisitor, class Visitor, class PostVisitor>
         void accept(PreVisitor &&preVisit, Visitor &&visit, PostVisitor &&postVisit) {
             std::forward<PreVisitor>(preVisit)(ID(), ShortName(), LongName());
-            
+
             doTripletForwardVisit(1, std::move("uint8_t"s), std::move("command"s), m_command, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(2, std::move("float"s), std::move("seekTo"s), m_seekTo, preVisit, visit, postVisit);
-            
+
             std::forward<PostVisitor>(postVisit)();
         }
 
     private:
-        
+
         uint8_t m_command{ 0 }; // field identifier = 1.
-        
+
         float m_seekTo{ 0.0f }; // field identifier = 2.
-        
+
 };
 }}
 
@@ -4284,51 +4284,51 @@ class LIB_API PlayerStatus {
         static int32_t ID();
         static const std::string ShortName();
         static const std::string LongName();
-        
+
         PlayerStatus& state(const uint8_t &v) noexcept;
         uint8_t state() const noexcept;
-        
+
         PlayerStatus& numberOfEntries(const uint32_t &v) noexcept;
         uint32_t numberOfEntries() const noexcept;
-        
+
         PlayerStatus& currentEntryForPlayback(const uint32_t &v) noexcept;
         uint32_t currentEntryForPlayback() const noexcept;
-        
+
 
         template<class Visitor>
         void accept(Visitor &visitor) {
             visitor.preVisit(ID(), ShortName(), LongName());
-            
+
             doVisit(1, std::move("uint8_t"s), std::move("state"s), m_state, visitor);
-            
+
             doVisit(2, std::move("uint32_t"s), std::move("numberOfEntries"s), m_numberOfEntries, visitor);
-            
+
             doVisit(3, std::move("uint32_t"s), std::move("currentEntryForPlayback"s), m_currentEntryForPlayback, visitor);
-            
+
             visitor.postVisit();
         }
 
         template<class PreVisitor, class Visitor, class PostVisitor>
         void accept(PreVisitor &&preVisit, Visitor &&visit, PostVisitor &&postVisit) {
             std::forward<PreVisitor>(preVisit)(ID(), ShortName(), LongName());
-            
+
             doTripletForwardVisit(1, std::move("uint8_t"s), std::move("state"s), m_state, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(2, std::move("uint32_t"s), std::move("numberOfEntries"s), m_numberOfEntries, preVisit, visit, postVisit);
-            
+
             doTripletForwardVisit(3, std::move("uint32_t"s), std::move("currentEntryForPlayback"s), m_currentEntryForPlayback, preVisit, visit, postVisit);
-            
+
             std::forward<PostVisitor>(postVisit)();
         }
 
     private:
-        
+
         uint8_t m_state{ 0 }; // field identifier = 1.
-        
+
         uint32_t m_numberOfEntries{ 0 }; // field identifier = 2.
-        
+
         uint32_t m_currentEntryForPlayback{ 0 }; // field identifier = 3.
-        
+
 };
 }}
 
@@ -7932,7 +7932,7 @@ class LIBCLUON_API Player {
 
         /**
          * This method initializes the global index where the sample
-         * time stamps are sorted chronocally and mapped to the 
+         * time stamps are sorted chronocally and mapped to the
          * corresponding cluon::data::Envelope in the rec file.
          */
         void initializeIndex() noexcept;
@@ -8021,7 +8021,7 @@ class LIBCLUON_API Player {
          *
          * @param numberOfEntries Number of entries in cache.
          * @param refillMultiplicator Multiplicator to modify the amount of envelopes to be refilled.
-         * @return Modified refillMultiplicator recommedned to be used next time 
+         * @return Modified refillMultiplicator recommedned to be used next time
          */
         float checkRefillingCache(const uint32_t &numberOfEntries, float refillMultiplicator) noexcept;
 
@@ -8543,9 +8543,9 @@ inline std::pair<std::vector<MetaMessage>, MessageParser::MessageParserErrorCode
         PRIMITIVE_TYPE              <- < 'bool' / 'float' / 'double' /
                                          'char' /
                                          'bytes' / 'string' /
-                                         'int8' / 'uint8' / 
-                                         'int16' / 'uint16' / 
-                                         'int32' / 'uint32' / 
+                                         'int8' / 'uint8' /
+                                         'int16' / 'uint16' /
+                                         'int32' / 'uint32' /
                                          'int64' / 'uint64' /
                                          MESSAGE_TYPE >
 
@@ -14396,7 +14396,7 @@ public:
     virtual void pop() override {
         items_.erase(items_.begin());
     }
-    
+
     virtual const basic_data<string_type>* get(const string_type& name) const override {
         // process {{.}} name
         if (name.size() == 1 && name.at(0) == '.') {
@@ -14461,7 +14461,7 @@ public:
     bool is_valid() const {
         return errorMessage_.empty();
     }
-    
+
     const string_type& error_message() const {
         return errorMessage_;
     }
@@ -14478,7 +14478,7 @@ public:
         });
         return stream;
     }
-    
+
     string_type render(const basic_data<string_type>& data) {
         std::basic_ostringstream<typename string_type::value_type> ss;
         return render(data, ss).str();
@@ -14505,7 +14505,7 @@ public:
 
 private:
     using StringSizeType = typename string_type::size_type;
-    
+
     class Tag {
     public:
         enum class Type {
@@ -14530,7 +14530,7 @@ private:
             return type == Type::SectionEnd;
         }
     };
-    
+
     class component {
     public:
         string_type text;
@@ -14573,7 +14573,7 @@ private:
         : escape_(html_escape<string_type>)
     {
     }
-    
+
     basic_mustache(const string_type& input, context_internal& ctx)
         : basic_mustache() {
         parse(input, ctx);
@@ -14581,18 +14581,18 @@ private:
 
     void parse(const string_type& input, context_internal& ctx) {
         using streamstring = std::basic_ostringstream<typename string_type::value_type>;
-        
+
         const string_type braceDelimiterEndUnescaped(3, '}');
         const StringSizeType inputSize{input.size()};
-        
+
         bool currentDelimiterIsBrace{ctx.delimiterSet.is_default()};
-        
+
         std::vector<component*> sections{&rootComponent_};
         std::vector<StringSizeType> sectionStarts;
-        
+
         StringSizeType inputPosition{0};
         while (inputPosition != inputSize) {
-            
+
             // Find the next tag start delimiter
             const StringSizeType tagLocationStart{input.find(ctx.delimiterSet.begin, inputPosition)};
             if (tagLocationStart == string_type::npos) {
@@ -14605,7 +14605,7 @@ private:
                 const component comp{{input, inputPosition, tagLocationStart - inputPosition}, inputPosition};
                 sections.back()->children.push_back(comp);
             }
-            
+
             // Find the next tag end delimiter
             StringSizeType tagContentsLocation{tagLocationStart + ctx.delimiterSet.begin.size()};
             const bool tagIsUnescapedVar{currentDelimiterIsBrace && tagLocationStart != (inputSize - 2) && input.at(tagContentsLocation) == ctx.delimiterSet.begin.at(0)};
@@ -14621,7 +14621,7 @@ private:
                 errorMessage_.assign(ss.str());
                 return;
             }
-            
+
             // Parse tag
             const string_type tagContents{trim(string_type{input, tagContentsLocation, tagLocationEnd - tagContentsLocation})};
             component comp;
@@ -14641,7 +14641,7 @@ private:
             }
             comp.position = tagLocationStart;
             sections.back()->children.push_back(comp);
-            
+
             // Start next search after this tag
             inputPosition = tagLocationEnd + currentTagDelimiterEndSize;
 
@@ -14661,7 +14661,7 @@ private:
                 sectionStarts.pop_back();
             }
         }
-        
+
         // Check for sections without an ending tag
         walk([this](component& comp) -> WalkControl {
             if (!comp.tag.isSectionBegin()) {
@@ -14680,14 +14680,14 @@ private:
             return;
         }
     }
-    
+
     enum class WalkControl {
         Continue,
         Stop,
         Skip,
     };
     using WalkCallback = std::function<WalkControl(component&)>;
-    
+
     void walk(const WalkCallback& callback) {
         walkChildren(callback, rootComponent_);
     }
@@ -14699,7 +14699,7 @@ private:
             }
         }
     }
-    
+
     WalkControl walkComponent(const WalkCallback& callback, component& comp) {
         WalkControl control{callback(comp)};
         if (control == WalkControl::Stop) {
@@ -14713,7 +14713,7 @@ private:
         }
         return control;
     }
-    
+
     bool isSetDelimiterValid(const string_type& delimiter) {
         // "Custom delimiters may not contain whitespace or the equals sign."
         for (const auto ch : delimiter) {
@@ -14723,7 +14723,7 @@ private:
         }
         return true;
     }
-    
+
     bool parseSetDelimiterTag(const string_type& contents, delimiter_set<string_type>& delimiterSet) {
         // Smallest legal tag is "=X X="
         if (contents.size() < 5) {
@@ -14748,7 +14748,7 @@ private:
         delimiterSet.end = end;
         return true;
     }
-    
+
     void parseTagContents(bool isUnescapedVar, const string_type& contents, Tag& tag) {
         if (isUnescapedVar) {
             tag.type = Tag::Type::UnescapedVariable;
@@ -14809,7 +14809,7 @@ private:
             handler(comp.text);
             return WalkControl::Continue;
         }
-        
+
         const Tag& tag{comp.tag};
         const basic_data<string_type>* var = nullptr;
         switch (tag.type) {
@@ -14861,7 +14861,7 @@ private:
             default:
                 break;
         }
-        
+
         return WalkControl::Continue;
     }
 
@@ -14870,7 +14870,7 @@ private:
         Unescape,
         Optional,
     };
-    
+
     bool renderLambda(const RenderHandler& handler, const basic_data<string_type>* var, context_internal& ctx, RenderLambdaEscape escape, const string_type& text, bool parseWithSameContext) {
         const typename basic_renderer<string_type>::type2 render2 = [this, &handler, var, &ctx, parseWithSameContext, escape](const string_type& text, bool escaped) {
             const auto processTemplate = [this, &handler, var, &ctx, escape, escaped](basic_mustache& tmpl) -> string_type {
@@ -14917,7 +14917,7 @@ private:
         }
         return errorMessage_.empty();
     }
-    
+
     bool renderVariable(const RenderHandler& handler, const basic_data<string_type>* var, context_internal& ctx, bool escaped) {
         if (var->is_string()) {
             const auto varstr = var->string_value();

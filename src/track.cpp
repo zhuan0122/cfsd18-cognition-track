@@ -19,11 +19,11 @@
 
 #include <iostream>
 #include <cmath>
-
 #include <thread>
 #include "track.hpp"
 
-Track::Track(std::map<std::string, std::string> commandlineArguments) :
+Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
+  m_od4(od4),
   m_groundSpeed{0.0f},
   m_newFrame{true},
   m_objectId{1},
@@ -37,10 +37,46 @@ Track::Track(std::map<std::string, std::string> commandlineArguments) :
   m_lastObjectId{},
   m_newId{true}
 {
-
+ setUp(commandlineArguments);
+}
+Track::~Track()
+{
+}
+void Track::setUp(std::map<std::string, std::string> commandlineArguments)
+{
+  // path
+  m_receiveTimeLimit=(commandlineArguments["receiveTimeLimit"].size() != 0) ? (static_cast<double>(std::stod(commandlineArguments["receiveTimeLimit"]))) : (m_receiveTimeLimit); //TODO do we really need to static cast a stof to float?
+  m_distanceBetweenPoints=(commandlineArguments["distanceBetweenPoints"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["distanceBetweenPoints"]))) : (m_distanceBetweenPoints);
+  m_traceBack=(commandlineArguments["useTraceBack"].size() != 0) ? (std::stoi(commandlineArguments["useTraceBack"])==1) : (false);
+  // steering
+  m_moveOrigin=(commandlineArguments["useMoveOrigin"].size() != 0) ? (std::stoi(commandlineArguments["useMoveOrigin"])==1) : (true);
+  m_previewTime=(commandlineArguments["previewTime"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTime"]))) : (m_previewTime);
+  // sharp
+  m_sharp=(commandlineArguments["useSharp"].size() != 0) ? (std::stoi(commandlineArguments["useSharp"])==1) : (false);
+  m_nSharp=(commandlineArguments["nSharpPreviewPoints"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nSharpPreviewPoints"]))) : (m_nSharp);
+  m_K1=(commandlineArguments["sharpK1"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sharpK1"]))) : (m_K1);
+  m_Ky=(commandlineArguments["sharpKy"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sharpKy"]))) : (m_Ky);
+  m_C=(commandlineArguments["sharpBigC"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sharpBigC"]))) : (m_C);
+  m_c=(commandlineArguments["sharpSmallC"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sharpSmallC"]))) : (m_c);
+  // velocity control
+  m_axSpeedProfile=(commandlineArguments["axSpeedProfile"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["axSpeedProfile"]))) : (m_axSpeedProfile);
+  m_velocityLimit=(commandlineArguments["velocityLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["velocityLimit"]))) : (m_velocityLimit);
+  m_mu=(commandlineArguments["mu"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["mu"]))) : (m_mu);
+  m_axLimitPositive=(commandlineArguments["axLimitPositive"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["axLimitPositive"]))) : (m_axLimitPositive);
+  m_axLimitNegative=(commandlineArguments["axLimitNegative"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["axLimitNegative"]))) : (m_axLimitNegative);
+  m_headingErrorDependency=(commandlineArguments["headingErrorDependency"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["headingErrorDependency"]))) : (m_headingErrorDependency);
+  // curvature estimation
+  m_polyFit=(commandlineArguments["usePolyFit"].size() != 0) ? (std::stoi(commandlineArguments["usePolyFit"])==1) : (false);
+  m_step=(commandlineArguments["curvEstStepsize"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["curvEstStepsize"]))) : (m_step);
+  m_polyDeg=(commandlineArguments["polynomialDegree"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["polynomialDegree"]))) : (m_polyDeg);
+  m_pointsPerSegment=(commandlineArguments["pointsPerPolySegment"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["pointsPerPolySegment"]))) : (m_pointsPerSegment);
+  // vehicle specific
+  m_wheelAngleLimit=(commandlineArguments["wheelAngleLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelAngleLimit"]))) : (m_wheelAngleLimit);
+  m_wheelBase=(commandlineArguments["wheelBase"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelBase"]))) : (m_wheelBase);
+  m_frontToCog=(commandlineArguments["frontToCog"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["frontToCog"]))) : (m_frontToCog);
 }
 
-Track::~Track()
+void Track::tearDown()
 {
 }
 
@@ -126,10 +162,8 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     auto wait = std::chrono::system_clock::now(); // Time point now
     std::chrono::duration<double> dur = wait-m_timeReceived; // Duration since last message recieved to m_surfaceFrame
     double duration = (m_objectId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
-// TODO: Fix commandlineArguments for all configuration stuff
-    double receiveTimeLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.receiveTimeLimit");
 
-    if (duration>receiveTimeLimit) { //Only for debug
+    if (duration>m_receiveTimeLimit) { //Only for debug
       std::cout<<"DURATION TIME TRACK EXCEEDED: "<<duration<<std::endl;
       std::cout << "Surfaces to run: " <<m_surfaceFrame.size() <<std::endl;
       /*std::vector<float> v(4);
@@ -142,7 +176,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     }
 
     // Run if frame is full or if we have waited to long for the remaining messages
-    if ((m_surfaceFrame.size()==m_nSurfacesInframe || duration>receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
+    if ((m_surfaceFrame.size()==m_nSurfacesInframe || duration>m_receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
       //std::cout<<"Run condition OK "<<"\n";
       //std::cout << "duration: " <<duration <<std::endl;
       std::map< double, std::vector<float> > surfaceFrame;
@@ -163,35 +197,13 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
   }
 }
 
-  // TODO: logic for different states, start and stop
-  /*
-  if (a_container.getDataType() == opendlv::system::SignalStatusMessage::ID()) {
-    // auto kinematicState = a_container.getData<opendlv::coord::KinematicState>();
-  }
-  if (a_container.getDataType() == opendlv::system::SystemOperationState::ID()) {
-    // auto kinematicState = a_container.getData<opendlv::coord::KinematicState>();
-  }
-  if (a_container.getDataType() == opendlv::system::NetworkStatusMessage::ID()) {
-    // auto kinematicState = a_container.getData<opendlv::coord::KinematicState>();
-  }
-  */
-
-
-
-void Track::setUp()
-{
-}
-
-void Track::tearDown()
-{
-}
 
 void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
   std::vector<float> v;
   Eigen::MatrixXf localPath(surfaceFrame.size()*2,2);
   //std::cout<<"localPath.rows(): "<<localPath.rows()<<"\n";
   {
-    odcore::base::Lock lockSurface(m_surfaceMutex);
+    std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
     int I=0;
     for (std::map<double, std::vector<float> >::iterator it = surfaceFrame.begin();it !=surfaceFrame.end();it++){
       v=it->second;
@@ -240,12 +252,10 @@ void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
         std::cout << "ONE POINT signal recieved " << std::endl;
       }
       else { //Place equidistant points
-// TODO: Fix commandlineArguments for all configuration stuff
-        float const distanceBetweenPoints = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.distanceBetweenPoints");
-        bool const traceBack = getKeyValueConfiguration().getValue<bool>("logic-cfsd18-cognition-track.traceBack");
+
         Eigen::MatrixXf localPathCopy;
-        if (traceBack){
-          Eigenn::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
+        if (m_traceBack){
+          Eigen::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
           localPathCopy.resize(localPath.rows()+1,2);
           localPathCopy.row(0) = firstPoint;
           localPathCopy.block(1,0,localPath.rows(),2) = localPath;
@@ -253,26 +263,17 @@ void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
         } else{
           localPathCopy = localPath;
         }
-        localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,distanceBetweenPoints);
+        localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
       }
     } //else Only one point remaining
   }
   //std::cout<<"localPath: "<<localPath<<"\n";
-// TODO: Fix commandlineArguments for all configuration stuff
-  auto kv = getKeyValueConfiguration();
-  float const previewTime = kv.getValue<float>("logic-cfsd18-cognition-track.previewTime");
-  float const velocityLimit = kv.getValue<float>("logic-cfsd18-cognition-track.velocityLimit");
-  float const mu = kv.getValue<float>("logic-cfsd18-cognition-track.mu");
-  float const axLimitPositive = kv.getValue<float>("logic-cfsd18-cognition-track.axLimitPositive");
-  float const axLimitNegative = kv.getValue<float>("logic-cfsd18-cognition-track.axLimitNegative");
-  float const headingErrorDependency = kv.getValue<float>("logic-cfsd18-cognition-track.headingErrorDependency");
-  bool const sharp = kv.getValue<bool>("logic-cfsd18-cognition-track.RunSharp");
   float groundSpeedCopy;
   {
     std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
     groundSpeedCopy = m_groundSpeed;
   }
-  float previewDistance = std::abs(groundSpeedCopy)*previewTime;
+  float previewDistance = std::abs(groundSpeedCopy)*m_previewTime;
   float pathLength=localPath.row(0).norm();
   if(localPath.rows()>1){
     for (int i = 0; i < localPath.rows()-1; i++) {
@@ -286,46 +287,35 @@ void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
 
   float headingRequest;
   float distanceToAimPoint;
-  if (sharp) {
+  if (m_sharp) {
     headingRequest = Track::driverModelSharp(localPath, previewDistance);
     distanceToAimPoint = 3.0f;
   }
   else{
-    auto steering = Track::driverModelSteering(localPath, groundSpeedCopy, previewTime);
+    auto steering = Track::driverModelSteering(localPath, groundSpeedCopy, m_previewTime);
     headingRequest = std::get<0>(steering);
     distanceToAimPoint = std::get<1>(steering);
   }
-  float accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, velocityLimit, axLimitPositive, axLimitNegative, previewDistance, headingRequest, headingErrorDependency, mu, STOP);
+  float accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, m_velocityLimit, m_axLimitPositive, m_axLimitNegative, headingRequest, m_headingErrorDependency, m_mu, STOP);
 
 //std::cout << "Sending headingRequest: " << headingRequest << std::endl;
-// TODO: Fix sending messages with libcluon od4session
-  //opendlv::logic::action::AimPoint o1;
-  opendlv::proxy::GroundSteeringRequest o1;
-  //o1.setAzimuthAngle(headingRequest);
-  o1.setGroundSteering(headingRequest);
-  odcore::data::Container c1(o1);
-  getConference().send(c1);
 
-  //Send for Ui TODO: Remove
-  opendlv::logic::action::AimPoint o4;
-  o4.setAzimuthAngle(headingRequest);
-  o4.setDistance(distanceToAimPoint);
-  odcore::data::Container c4(o4);
-  getConference().send(c4);
+  opendlv::logic::action::AimPoint steer;
+  steer.azimuthAngle(headingRequest);
+  steer.distance(distanceToAimPoint);
+  m_od4.send(steer);
 
   if (accelerationRequest >= 0.0f) {
 //std::cout << "Sending accelerationRequest: " << accelerationRequest << std::endl;
-    opendlv::proxy::GroundAccelerationRequest o2;
-    o2.setGroundAcceleration(accelerationRequest);
-    odcore::data::Container c2(o2);
-    getConference().send(c2);
+    opendlv::proxy::GroundAccelerationRequest acc;
+    acc.groundAcceleration(accelerationRequest);
+    m_od4.send(acc);
   }
   else if(accelerationRequest < 0.0f){
 //std::cout << "Sending decelerationRequest: " << accelerationRequest << std::endl;
-    opendlv::proxy::GroundDecelerationRequest o3;
-    o3.setGroundDeceleration(-accelerationRequest);
-    odcore::data::Container c3(o3);
-    getConference().send(c3);
+    opendlv::proxy::GroundDecelerationRequest dec;
+    dec.groundDeceleration(-accelerationRequest);
+    m_od4.send(dec);
   }
 }
 
@@ -368,7 +358,7 @@ Eigen::MatrixXf Track::placeEquidistantPoints(Eigen::MatrixXf oldPathPoints, boo
   else
   {
     //Calculate how many points will fit
-    nEqPoints = std::ceil(pathLength/eqDistance)+1;
+    nEqPoints = static_cast<int>(std::ceil(static_cast<double>(pathLength)/static_cast<double>(eqDistance))+1.0);
   }
   // The latest point that you placed
   Eigen::MatrixXf latestNewPointCoords = oldPathPoints.row(0);
@@ -421,65 +411,57 @@ Eigen::MatrixXf Track::placeEquidistantPoints(Eigen::MatrixXf oldPathPoints, boo
 } // End of placeEquidistantPoints
 
 float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
-// TODO: Fix commandlineArguments for all configuration stuff
-  auto kv = getKeyValueConfiguration();
-  int n = kv.getValue<int>("logic-cfsd18-cognition-track.nSharp");
-  float K1 = kv.getValue<float>("logic-cfsd18-cognition-track.K1Sharp");
-  float Ky = kv.getValue<float>("logic-cfsd18-cognition-track.KySharp");
-  float C = kv.getValue<float>("logic-cfsd18-cognition-track.bigCSharp");
-  float c = kv.getValue<float>("logic-cfsd18-cognition-track.smallcSharp");
-  float wheelAngleLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.wheelAngleLimit");
   float headingRequest;
+  int n = m_nSharp;
   if (localPath.rows()>2) {
-
-  float sectionLength = previewDistance/n;
-  std::vector<float> error(n);
-  Eigen::MatrixXf::Index idx;
-  float xMax = localPath.col(0).maxCoeff(&idx);
-  error[0]=localPath(0,1);
-  int k = 1;
-  float sumPoints = 0.0f;
-  for (int i = 0; i < localPath.rows()-1 ; i++) {
-  sumPoints += (localPath.row(i+1)-localPath.row(i)).norm();
-    if (sumPoints>=k*sectionLength) {
-      if(k*sectionLength<xMax){
-        error[k] = localPath(i,1);
-        k++;
+    float sectionLength = previewDistance/n;
+    std::vector<float> error(n);
+    Eigen::MatrixXf::Index idx;
+    float xMax = localPath.col(0).maxCoeff(&idx);
+    error[0]=localPath(0,1);
+    int k = 1;
+    float sumPoints = 0.0f;
+    for (int i = 0; i < localPath.rows()-1 ; i++) {
+    sumPoints += (localPath.row(i+1)-localPath.row(i)).norm();
+      if (sumPoints>=k*sectionLength) {
+        if(k*sectionLength<xMax){
+          error[k] = localPath(i,1);
+          k++;
+        }
+        else{
+          //std::cout<<"index: "<<idx<<std::endl;
+          //std::cout<<"localPath(idx): "<<localPath(idx)<<std::endl;
+          error[k] = localPath(idx,1);
+          k++;
+        }
       }
-      else{
-        //std::cout<<"index: "<<idx<<std::endl;
-        //std::cout<<"localPath(idx): "<<localPath(idx)<<std::endl;
-        error[k] = localPath(idx,1);
-        k++;
+      if(k>n-1){
+        break;
       }
     }
-    if(k>n-1){
-      break;
+    if(k<n-2){
+      error[n-1] = localPath(localPath.rows()-1,1);
     }
-  }
-  if(k<n-2){
-    error[n-1] = localPath(localPath.rows()-1,1);
-  }
 
-  float ey = std::atan2(localPath(10,1)-localPath(0,1),localPath(10,0)-localPath(0,0));
-    //std::cout<<"K1e1 "<<K1*error[0]<<std::endl;
-    //std::cout<<"Kyey "<<Ky*ey<<std::endl;
-  float errorSum = 0.0f;
-  int j=0;
-  for (int i = 1; i < n; i++) {
-    errorSum += error[i]*1.0f/expf(j)*C;
-    //std::cout<<"e "<< i <<": "<<error[i]<<std::endl;
-    //std::cout<<"K "<<i<<": "<<1.0f/expf(j)*C<<std::endl;
-    //std::cout<<"K[i]e[i] i= "<<i<<": "<<error[i]*1.0f/expf(j)*C<<std::endl;
-    j+=c;
-  }
+    float ey = std::atan2(localPath(1,1)-localPath(0,1),localPath(1,0)-localPath(0,0));
+      //std::cout<<"K1e1 "<<K1*error[0]<<std::endl;
+      //std::cout<<"Kyey "<<Ky*ey<<std::endl;
+    float errorSum = 0.0f;
+    float j=0.0f;
+    for (int i = 1; i < n; i++) {
+      errorSum += error[i]*1.0f/expf(j)*m_C;
+      //std::cout<<"e "<< i <<": "<<error[i]<<std::endl;
+      //std::cout<<"K "<<i<<": "<<1.0f/expf(j)*C<<std::endl;
+      //std::cout<<"K[i]e[i] i= "<<i<<": "<<error[i]*1.0f/expf(j)*C<<std::endl;
+      j+=m_c;
+    }
 
-  headingRequest = Ky*ey + K1*error[1] + errorSum;
-  if (headingRequest>=0) {
-    headingRequest = std::min(headingRequest,wheelAngleLimit*3.14159265f/180.0f);
-  } else {
-    headingRequest = std::max(headingRequest,-wheelAngleLimit*3.14159265f/180.0f);
-  }
+    headingRequest = m_Ky*ey + m_K1*error[1] + errorSum;
+    if (headingRequest>=0) {
+      headingRequest = std::min(headingRequest,m_wheelAngleLimit*3.14159265f/180.0f);
+    } else {
+      headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
+    }
   }
   else{
     headingRequest = 0.0f;
@@ -489,27 +471,13 @@ float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
 
 
 std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, float groundSpeedCopy, float previewTime) {
-  //driverModelSteering calculates the desired heading of CFSD18 vehicle
-  // given the vehicles velocity, a set time to aimpoint and a path in local
-  // coordinates (vehicle is origo).
-  //
-  //Input
-  //   LOCALPATH               [n x 2] Local coordinates of the path [x,y]
-  //   GROUNDSPEEDCOPY         [1 x 1] Velocity of the vehicle [m/s]
-  //   PREVIEWTIME             [1 x 1] Time to aimpoint [s].
-  //
-  //Output
-  //   HEADINGREQUEST  [1 x 1] Desired heading angle [rad]
   float headingRequest;
   Eigen::Vector2f aimPoint(2);
   bool preSet = false;
-// TODO: Fix commandlineArguments for all configuration stuff
-  bool const moveOrigin = getKeyValueConfiguration().getValue<bool>("logic-cfsd18-cognition-track.moveOrigin");
-  if (moveOrigin && localPath.rows()>2) {
+  if (m_moveOrigin && localPath.rows()>2) {
     // Move localPath to front wheel axis
-    float const frontToCog = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.frontToCog");
     Eigen::MatrixXf foo = Eigen::MatrixXf::Zero(localPath.rows(),2);
-    foo.col(0).fill(frontToCog);
+    foo.col(0).fill(m_frontToCog);
     localPath = localPath-foo;
 
     // Remove negative path points
@@ -559,11 +527,11 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
       }
       else {// Place aimpoint on first path element
          //interpolation
-        distanceP1P2 = localPath.row(0).norm(); // Distance is equal to the distance to the first point;
+        /*distanceP1P2 = localPath.row(0).norm(); // Distance is equal to the distance to the first point;
         overshoot = sumPoints - previewDistance;
         distanceP1AimPoint = distanceP1P2 - overshoot;
-        aimPoint = localPath.row(0)*(distanceP1AimPoint/distanceP1P2);
-        //aimPoint = localPath.row(0);
+        aimPoint = localPath.row(0)*(distanceP1AimPoint/distanceP1P2);*/
+        aimPoint = localPath.row(0);
       }
     }
     // If the path is too short, place aimpoint at the last path element
@@ -572,14 +540,12 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
     }
   }
   // Angle to aimpoint
-  headingRequest = atan2(aimPoint(1),aimPoint(0));
+  headingRequest = atan2f(aimPoint(1),aimPoint(0));
   // Limit heading request due to physical limitations
-// TODO: Fix commandlineArguments for all configuration stuff
-  float wheelAngleLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.wheelAngleLimit");
   if (headingRequest>=0) {
-    headingRequest = std::min(headingRequest,wheelAngleLimit*3.14159265f/180.0f);
+    headingRequest = std::min(headingRequest,m_wheelAngleLimit*3.14159265f/180.0f);
   } else {
-    headingRequest = std::max(headingRequest,-wheelAngleLimit*3.14159265f/180.0f);
+    headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
   }
 
   float distanceToAimPoint=aimPoint.norm();
@@ -590,73 +556,50 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   return std::make_tuple(headingRequest,distanceToAimPoint);
 }
 
-float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCopy, float velocityLimit, float axLimitPositive, float axLimitNegative, float previewDistance, float headingRequest, float headingErrorDependency, float mu, bool STOP){
-  //driverModelVelocity calculates the desired acceleration of the CFSD18
-  //vehicle.
-  //
-  //Input
-  //   LOCALPATH                   [n x 2] Local coordinates of the path [x,y]
-  //   GROUNDSPEEDCOPY             [1 x 1] Velocity of the vehicle [m/s]
-  //   VELOCITYLIMIT               [1 x 1] Maximum allowed velocity [m/s]
-  //   (AYLIMIT                     [1 x 1] Allowed lateral acceleration [m/s^2])
-  //   AXLIMITPOITIVE              [1 x 1] Allowed longitudinal acceleration (positive) [m/s^2]
-  //   AXLIMITNEGATIVE             [1 x 1] Allowed longitudinal acceleration (negative) [m/s^2]
-  //   HEADINGREQUEST              [1 x 1] Heading error to aimpoint [rad]
-  //   HEADINGERRORDEPENDENCY      [1 x 1] Constant
-  //   MU                          [1 x 1] Friction coefficient
-  //
-  //Output
-  //   ACCELERATIONREQUEST         [1 x 1] Signed desired acceleration
+float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCopy, float velocityLimit, float axLimitPositive, float axLimitNegative, float headingRequest, float headingErrorDependency, float mu, bool STOP){
   float accelerationRequest;
   Eigen::VectorXf speedProfile;
   std::vector<float> curveRadii;
-  int step;
+  int step = m_step;
   float g = 9.81f;
-  float axSpeedProfile = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.axSpeedProfile");
-  if (axSpeedProfile<0) {
-    axSpeedProfile = std::max(axLimitPositive,-axLimitNegative);
+  if (m_axSpeedProfile<0) {
+    m_axSpeedProfile = std::max(axLimitPositive,-axLimitNegative);
   }
-  float ayLimit = sqrtf(powf(mu*g,2)-powf(axSpeedProfile,2));
+  float ayLimit = sqrtf(powf(mu*g,2)-powf(m_axSpeedProfile,2));
   if (std::isnan(ayLimit)) {
     std::cout<<"ayLimit is NAN, axLimit set too High"<<std::endl;
     ayLimit = 1.0f;
     std::cout<<"ayLimit set to: "<<ayLimit<<std::endl;
   }
-
   if ((!STOP) && (localPath.rows() > 2)){
     // Caluclate curvature of path
-// TODO: Fix commandlineArguments for all configuration stuff
-    bool polyFit = getKeyValueConfiguration().getValue<bool>("logic-cfsd18-cognition-track.polyFit");
-      if (polyFit){
+      if (m_polyFit){
         step = 0;
         curveRadii = curvaturePolyFit(localPath);
       }
       else{
-        step = getKeyValueConfiguration().getValue<int>("logic-cfsd18-cognition-track.step");
         while (localPath.rows()-(2*step)<=0 && step > 0){ //This makes sure that step is as big as possible (up to limit)
           step--;
         }
         curveRadii = curvatureTriCircle(localPath,step);
       }
 
-    float const wheelAngleLimit = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.wheelAngleLimit");
-    float const distanceBetweenPoints = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.distanceBetweenPoints");
-    int index = floor(previewDistance/distanceBetweenPoints);
+    /*int index = floor(previewDistance/m_distanceBetweenPoints); //This section calculates the angle to the last path point
     if (index>localPath.rows()-1) {
       index = localPath.rows()-1;
       std::cout<<"INDEX TOO FAR (it was possible)"<<std::endl;
     }
     float previewAngle = std::atan2(localPath(index,1),localPath(index,0));
     if (previewAngle>=0) {
-      previewAngle = std::min(previewAngle,wheelAngleLimit*3.14159265f/180.0f);
+      previewAngle = std::min(previewAngle,m_wheelAngleLimit*3.14159265f/180.0f);
     } else {
-      previewAngle = std::max(previewAngle,-wheelAngleLimit*3.14159265f/180.0f);
-    }
-    float headingError = std::abs(headingRequest)/(wheelAngleLimit*3.14159265f/180.0f);
+      previewAngle = std::max(previewAngle,-m_wheelAngleLimit*3.14159265f/180.0f);
+    }*/
+    float headingError = std::abs(headingRequest)/(m_wheelAngleLimit*3.14159265f/180.0f);
     //std::cout<<"headingError: "<<headingError<<std::endl;
     //std::cout<<"headinError scaling: "<<1.0f-headingError*headingErrorDependency<<std::endl;
 
-    // Set velocity candidate based on expected lateral acceleration limit
+    // Set velocity candidate based on expected lateral acceleration
     speedProfile.resize(curveRadii.size());
     for (uint32_t k = 0; k < curveRadii.size(); k++){
     speedProfile(k) = std::min(sqrtf(ayLimit*curveRadii[k]),velocityLimit)*(1.0f-headingError*headingErrorDependency);
@@ -668,17 +611,17 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       std::cout<<curveRadii[i]<<std::endl;
     }*/
 
-    //float const distanceBetweenPoints = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.distanceBetweenPoints");
+
     //float brakeMetersBefore = 4;
-    //int K = round(brakeMetersBefore/distanceBetweenPoints);
+    //int K = round(brakeMetersBefore/m_distanceBetweenPoints);
     float tb;
     float tv;
-    float ta;
+    float ta = 5.0;
     float s=0;
     float tmp;
     float brakeTime=100000.0f;
     float accPointMin=100000.0f;
-    //float rollResistance = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.rollResistance");
+    //float rollResistance = -0.2f;
     int i;
     int idx;
     int accIdx = 0;
@@ -706,13 +649,11 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         }
       }
     }
-// TODO: Fix commandlineArguments for all configuration stuff
-    float const wheelBase = getKeyValueConfiguration().getValue<float>("logic-cfsd18-cognition-track.wheelBase");
-    float ay = powf(groundSpeedCopy,2)/(wheelBase/std::tan(std::abs(headingRequest)));
-    if(brakeTime<=0.0f){
-      if (brakeTime<0.0f) {
-        //std::cout<<"braking too late, brakeTime: "<<brakeTime<<std::endl;
-      }
+    float ay = powf(groundSpeedCopy,2)/(m_wheelBase/std::tan(std::abs(headingRequest)));
+    if(brakeTime<=0.0f){ //braking is critical
+      /*if (brakeTime<0.0f) {
+        std::cout<<"braking too late, brakeTime: "<<brakeTime<<std::endl;
+      }*/
       accelerationRequest = axLimitNegative;
       //std::cout<<"brake max: "<<accelerationRequest<<std::endl;
       /*if (sqrtf(powf(ay,2)+powf(accelerationRequest,2)) >= g*mu) {
@@ -724,11 +665,11 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         accelerationRequest = 0.0f;
       }*/
     }
-    else if (brakeTime>0.0f && brakeTime<=0.3f){
+    else if (brakeTime>0.0f && brakeTime<=0.3f){//braking is critical soon, brake prematurely
       /*if (idx-K>=0 && curveRadii[idx]<10.0f) {
         accelerationRequest = std::max((speedProfile(idx)-groundSpeedCopy)/(2*distanceToCriticalPoint[idx-K]),axLimitNegative);
       }else{*/
-        accelerationRequest = std::max((speedProfile(idx)-groundSpeedCopy)/(2*distanceToCriticalPoint[idx]),axLimitNegative);
+        accelerationRequest = std::max((speedProfile(idx)-groundSpeedCopy)/(2*distanceToCriticalPoint[idx]),axLimitNegative); //Uncomment if other than max braking should be used
         accelerationRequest = axLimitNegative;
         //std::cout<<"brake prematurely: "<<accelerationRequest<<std::endl;
       //}
@@ -745,11 +686,11 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         std::cout<<"roll resistance is enough"<<std::endl;
       }*/
     }
-    else if(brakeTime<= 0.5f){
+    else if(brakeTime<= 0.5f){ //if we need to brake within this time, don't give acceleration
       accelerationRequest = 0.0f;
       //std::cout<<"no need to accelerate, braking soon: "<<accelerationRequest<<std::endl;
     }
-    else if((speedProfile(accIdx)-groundSpeedCopy) < 0.5f && ta<-0.5f){ //UNUSED
+    else if((speedProfile(accIdx)-groundSpeedCopy) < 0.5f && ta<-0.5f){ //UNUSED TODO: check if really unused
       accelerationRequest = 0.0f;
       //std::cout<<"no need to accelerate: "<<accelerationRequest<<std::endl;
     }
@@ -789,16 +730,16 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     std::cout << "speedProfile = " << speedProfile.transpose() << "\n";
     // Choose velocity to achieve
     // Limit it dependent on the path length and heading request (heading error)
-    if(previewTime*groundSpeedCopy>distanceToAimPoint*1000000.0f){
-      speedProfile(0)=distanceToAimPoint/previewTime;
+    if(m_previewTime*groundSpeedCopy>distanceToAimPoint*1000000.0f){
+      speedProfile(0)=distanceToAimPoint/m_previewTime;
     }
     float pathLength = 0;
     for (int k=0; k<localPath.rows()-1; k++) {
       pathLength += (localPath.row(k+1)-localPath.row(k)).norm();
     }
   std::cout << "pathLength: " <<pathLength<< '\n';
-    if(previewTime*groundSpeedCopy>pathLength){
-      speedProfile(0)=distanceToAimPoint/previewTime;
+    if(m_previewTime*groundSpeedCopy>pathLength){
+      speedProfile(0)=distanceToAimPoint/m_previewTime;
     }
     float desiredVelocity = speedProfile(0)/(1.0f + headingErrorDependency*std::abs(headingRequest));
     // Calculate distance to desired velocity
@@ -829,7 +770,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       }
     }*/
     /*---------------------------------------------------------------------------*/
-  } //end if(!STOP)
+  } //end if(!STOP && (localPath.rows() > 2)
   else if(STOP){
     if (std::abs(groundSpeedCopy) > 0.01f){
       accelerationRequest = axLimitNegative;
@@ -868,7 +809,7 @@ std::vector<float> Track::curvatureTriCircle(Eigen::MatrixXf localPath, int step
 
     if (C-(A-B) <= 0) {
       //std::cout << "WARNING! The data are not side-lengths of a real triangle" << std::endl;
-      curveRadii[k] = 10000; // Large radius instead of inf value will reach velocitylimit
+      curveRadii[k] = 10000; // Large radius instead of inf value will reach m_velocityLimit
     }
     else {
       // https://people.eecs.berkeley.edu/~wkahan/Triangle.pdf
@@ -890,8 +831,8 @@ std::vector<float> Track::curvatureTriCircle(Eigen::MatrixXf localPath, int step
 std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: double check coordinate system, maybe switch x/y
   auto startPoly = std::chrono::system_clock::now();
 // TODO: Fix commandlineArguments for all configuration stuff
-  int n = getKeyValueConfiguration().getValue<int>("logic-cfsd18-cognition-track.polynomialDegree");
-  int pointsPerSegment =  getKeyValueConfiguration().getValue<int>("logic-cfsd18-cognition-track.pointsPerSegment");
+  int n = m_polyDeg;
+  int pointsPerSegment = m_pointsPerSegment;
   int i,j,segments,N;
   int k=0;
   uint32_t l=0;
@@ -933,7 +874,7 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: 
   Eigen::VectorXf y;
   Eigen::VectorXf a(n+1);
   int segmentBegin;
-  int segmentLength;
+  int segmentLength = pointsPerSegment;
 
   for (uint32_t P=0; P<dividedPathsX.size(); P++) {
     pathx = dividedPathsX[P];
@@ -942,7 +883,7 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: 
     if (pathx.size()<N) {
       N = pathx.size();
     }
-    segments = floor(pathx.size()/N); //number of segments
+    segments = pathx.size()/N; //number of segments
 
     for (int p=0; p<segments; p++){
       if ((p<segments-1) || (!(segments*N<pathx.size())) ){
@@ -1016,5 +957,3 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: 
   std::cout<<"\n";
   return curveRadii;
 } // end curvaturePolyFit
-
-

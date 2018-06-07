@@ -28,14 +28,14 @@
 
 class Track {
  public:
-  Track(std::map<std::string, std::string>);
+  Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4);
   Track(Track const &) = delete;
   Track &operator=(Track const &) = delete;
   virtual ~Track();
-  virtual void nextContainer(cluon::data::Envelope &);
+  void nextContainer(cluon::data::Envelope &);
 
  private:
-  void setUp();
+  void setUp(std::map<std::string, std::string> commandlineArguments);
   void tearDown();
 
   void collectAndRun(std::map< double, std::vector<float> >);
@@ -43,9 +43,42 @@ class Track {
   Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
   std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
   float driverModelSharp(Eigen::MatrixXf, float);
-  float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, float, bool);
+  float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, bool);
   std::vector<float> curvatureTriCircle(Eigen::MatrixXf, int);
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
+
+  /* commandlineArguments */
+  cluon::OD4Session &m_od4;
+  // path
+  double m_receiveTimeLimit{0.01};
+  float m_distanceBetweenPoints{0.5f};
+  bool m_traceBack{false};
+  // steering
+  bool m_moveOrigin{false};
+  float m_previewTime{0.3f};
+  //sharp
+  bool m_sharp{false};
+  int m_nSharp{10};
+  float m_K1{0.17f};
+  float m_Ky{0.5f};
+  float m_C{m_K1};
+  float m_c{1.0f};
+  // velocity control
+  float m_axSpeedProfile{-1.0f};
+  float m_velocityLimit{5.0f};
+  float m_mu{0.9f};
+  float m_axLimitPositive{5.0f};
+  float m_axLimitNegative{-5.0f};
+  float m_headingErrorDependency{0.7f};
+  // curvature estimation
+  bool m_polyFit{false};
+  int m_step{5};
+  int m_polyDeg{3};
+  int m_pointsPerSegment{15};
+  // vehicle specific
+  float m_wheelAngleLimit{20.0f};
+  float m_wheelBase{1.53f};
+  float m_frontToCog{0.765f};
 
   /* Member variables */
   float m_groundSpeed;
