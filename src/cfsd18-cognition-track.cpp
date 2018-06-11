@@ -30,27 +30,27 @@ int32_t main(int32_t argc, char **argv) {
   int32_t retCode{0};
   std::map<std::string, std::string> commandlineArguments = cluon::getCommandlineArguments(argc, argv);
   if (commandlineArguments.size()<=0) {
-    std::cerr << argv[0] << " is a NEAT driver implementation for the CFSD18 project." << std::endl;
+    std::cerr << argv[0] << " is a driver model returning heading and acceleration requests given a discrete path in local 2D coordinates" << std::endl;
     std::cerr << "Usage:   " << argv[0] << " --cid=<OpenDaVINCI session> [--id=<Identifier in case of simulated units>] [--verbose] [Module specific parameters....]" << std::endl;
-    std::cerr << "Example: " << argv[0] << "--cid=111 --id=120 --maxSteering=25.0 --maxAcceleration=5.0 --maxDeceleration=5.0" <<  std::endl;
+    std::cerr << "Example: " << argv[0] << "--cid=111 --id=221 --maxSteering=25.0 --maxAcceleration=5.0 --maxDeceleration=5.0 [more...]" <<  std::endl;
     retCode = 1;
   } else {
-    uint32_t const surfaceStamp=(commandlineArguments["surfaceStamp"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["surfaceStamp"])) : (0);
-    uint32_t const speedStamp=(commandlineArguments["speedStamp"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedStamp"])) : (0);
+    uint32_t const surfaceId=(commandlineArguments["surfaceId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["surfaceId"])) : (0);
+    uint32_t const speedId=(commandlineArguments["speedId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId"])) : (0);
 
     // Interface to a running OpenDaVINCI session
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     Track track(commandlineArguments, od4);
 
-    auto surfaceEnvelope{[&surfer = track, senderStamp = surfaceStamp](cluon::data::Envelope &&envelope)
+    auto surfaceEnvelope{[&surfer = track, senderStamp = surfaceId](cluon::data::Envelope &&envelope)
       {
         if(envelope.senderStamp() == senderStamp){
           surfer.nextContainer(envelope);
         }
       }
     };
-    auto speedEnvelope{[&surfer = track, senderStamp = speedStamp](cluon::data::Envelope &&envelope)
+    auto speedEnvelope{[&surfer = track, senderStamp = speedId](cluon::data::Envelope &&envelope)
       {
         if(envelope.senderStamp() == senderStamp){
           surfer.nextContainer(envelope);
