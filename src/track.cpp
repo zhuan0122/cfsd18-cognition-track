@@ -21,6 +21,7 @@
 #include <cmath>
 #include <thread>
 #include "track.hpp"
+#include <chrono>
 
 Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4),
@@ -35,7 +36,10 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_surfaceId{},
   m_timeReceived{},
   m_lastObjectId{},
-  m_newId{true}
+  m_newId{true},
+  m_tick{},
+  m_tock{},
+  m_newClock{true}
 {
  setUp(commandlineArguments);
 }
@@ -44,6 +48,7 @@ Track::~Track()
 }
 void Track::setUp(std::map<std::string, std::string> commandlineArguments)
 {
+  m_senderStamp=(commandlineArguments["senderStamp"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["senderStamp"]))) : (m_senderStamp);
   // path
   m_receiveTimeLimit=(commandlineArguments["receiveTimeLimit"].size() != 0) ? (static_cast<double>(std::stod(commandlineArguments["receiveTimeLimit"]))) : (m_receiveTimeLimit); //TODO do we really need to static cast a stof to float?
   m_distanceBetweenPoints=(commandlineArguments["distanceBetweenPoints"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["distanceBetweenPoints"]))) : (m_distanceBetweenPoints);
@@ -74,6 +79,11 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_wheelAngleLimit=(commandlineArguments["wheelAngleLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelAngleLimit"]))) : (m_wheelAngleLimit);
   m_wheelBase=(commandlineArguments["wheelBase"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelBase"]))) : (m_wheelBase);
   m_frontToCog=(commandlineArguments["frontToCog"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["frontToCog"]))) : (m_frontToCog);
+
+  std::cout<<"Track set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
+  for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
+    std::cout<<it->first<<" "<<it->second<<std::endl;
+  }
 }
 
 void Track::tearDown()
@@ -86,15 +96,19 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
     auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(a_container));
     m_groundSpeed = groundSpeed.groundSpeed();
-
+    //std::cout<<"Track received GroundSpeedReading: "<<groundSpeed.groundSpeed()<<std::endl;
   }
 
   if(a_container.dataType() == opendlv::logic::perception::GroundSurfaceProperty::ID()){
-      //std::cout << "TRACK RECIEVED A SURFACE!" << std::endl;
+    if (m_newClock) {
+      m_newClock = false;
+      m_tick = std::chrono::system_clock::now();
+    }
   //    m_lastTimeStamp = a_container.getSampleTimeStamp();
       auto surfaceProperty = cluon::extractMessage<opendlv::logic::perception::GroundSurfaceProperty>(std::move(a_container));
       int surfaceId = surfaceProperty.surfaceId();
       auto nSurfacesInframe = surfaceProperty.property();
+      //std::cout<<"Track recieved surface property: "<<" property: "<<nSurfacesInframe<<" frame ID: "<<surfaceId<<std::endl;
 
       if (m_newFrame) { // If true, a frame has just been sent
         m_newFrame = false;
@@ -113,7 +127,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
       auto groundSurfaceArea = cluon::extractMessage<opendlv::logic::perception::GroundSurfaceArea>(std::move(a_container));
       objectId = groundSurfaceArea.surfaceId();
       cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
-      double timeStamp = containerStamp.microseconds(); // Save timeStamp for sorting purposes;
+      double timeStamp = cluon::time::toMicroseconds(containerStamp); // Save timeStamp for sorting purposes;
       if (m_newId) { // TODO: does it need to be global? can it be initialized in another way?
         m_objectId = (objectId!=m_lastObjectId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
         //std::cout << "newId, m_objectId: " <<m_objectId <<std::endl;
@@ -130,6 +144,8 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
       float y3 = groundSurfaceArea.y3();
       float x4 = groundSurfaceArea.x4();
       float y4 = groundSurfaceArea.y4();
+      //std::cout<<"Track recieved surface: "<<" x1: "<<x1<<" y1: "<<y1<<" x2: "<<x2<<" y2: "<<y2<<" x3: "<<x3<<" y3: "<<y3<<" x4: "<<x4<<" y4 "<<y4<<" frame ID: "<<objectId<<" timeStamp: "<<timeStamp<<std::endl;
+
       std::vector<float> v(4);
       v[0] = (x1+x2)/2.0f;
       v[1] = (y1+y2)/2.0f;
@@ -139,6 +155,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
       if (objectId == m_objectId) {
         //std::cout << "objectId in frame: " <<objectId <<std::endl;
         m_surfaceFrame[timeStamp] = v;
+        m_timeReceived = std::chrono::system_clock::now(); //Store time for latest message recieved
         /*std::cout << "Surfaces in frame: " <<m_surfaceFrame.size() <<std::endl;
         for (std::map<double, std::vector<float> >::iterator it = m_surfaceFrame.begin();it !=m_surfaceFrame.end();it++){
           v = it->second;
@@ -146,7 +163,6 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
             std::cout<<v[i]<<"\n";
           }
         }*/
-        m_timeReceived = std::chrono::system_clock::now(); //Store time for latest message recieved
       } else if (objectId != m_lastObjectId){ // If message doesn't belong to current or previous frame.
         //std::cout << "objectId in buffer: " <<objectId <<std::endl;
         m_surfaceFrameBuffer[timeStamp] = v; // Place message content coordinates in buffer
@@ -179,26 +195,35 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     if ((m_surfaceFrame.size()==m_nSurfacesInframe || duration>m_receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
       //std::cout<<"Run condition OK "<<"\n";
       //std::cout << "duration: " <<duration <<std::endl;
-      std::map< double, std::vector<float> > surfaceFrame;
-      {
-      std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
-        m_newFrame = true; // Allow for new surface property
-        surfaceFrame = m_surfaceFrame; // Copy frame
-        m_surfaceFrame = m_surfaceFrameBuffer; // Add buffer to new frame
-        m_surfaceFrameBuffer.clear(); // Clear buffer
-        m_lastObjectId = m_objectId; // Update last object id to ignore late messages
-        m_newId = true; // Allow for new messages to be placed in m_surfaceFrame
-        //std::cout << "Cleared buffer " <<std::endl;
-      }
-      //std::cout << "Run " << surfaceFrame.size() << " surfaces"<< std::endl;
-      std::thread surfaceCollector(&Track::collectAndRun, this, surfaceFrame); // Run the surface in a thread
+      /*std::vector<float> v;
+      std::cout<<"Running surface: "<<std::endl;
+      for (std::map<double, std::vector<float> >::iterator it = m_surfaceFrame.begin();it !=m_surfaceFrame.end();it++){
+        v=it->second;
+        std::cout<<v[0]<<" "<<v[1]<<" "<<v[2]<<" "<<v[3]<<std::endl;
+      }*/
+      std::thread surfaceCollector(&Track::collectAndRun, this); // Run the surface in a thread
       surfaceCollector.detach();
     }
   }
 }
 
 
-void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
+void Track::collectAndRun(){
+  //std::cout<<"enter collectAndRun"<<"\n";
+
+  std::map< double, std::vector<float> > surfaceFrame;
+  {
+  std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
+    m_newFrame = true; // Allow for new surface property
+    surfaceFrame = m_surfaceFrame; // Copy frame
+    m_surfaceFrame = m_surfaceFrameBuffer; // Add buffer to new frame
+    m_surfaceFrameBuffer.clear(); // Clear buffer
+    m_lastObjectId = m_objectId; // Update last object id to ignore late messages
+    m_newId = true; // Allow for new messages to be placed in m_surfaceFrame
+    //std::cout << "Cleared buffer " <<std::endl;
+  }
+
+
   std::vector<float> v;
   Eigen::MatrixXf localPath(surfaceFrame.size()*2,2);
   //std::cout<<"localPath.rows(): "<<localPath.rows()<<"\n";
@@ -299,24 +324,30 @@ void Track::collectAndRun(std::map< double, std::vector<float> > surfaceFrame){
   float accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, m_velocityLimit, m_axLimitPositive, m_axLimitNegative, headingRequest, m_headingErrorDependency, m_mu, STOP);
 
 //std::cout << "Sending headingRequest: " << headingRequest << std::endl;
-
+std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
   opendlv::logic::action::AimPoint steer;
   steer.azimuthAngle(headingRequest);
   steer.distance(distanceToAimPoint);
-  m_od4.send(steer);
+  m_od4.send(steer, sampleTime, m_senderStamp);
 
   if (accelerationRequest >= 0.0f) {
 //std::cout << "Sending accelerationRequest: " << accelerationRequest << std::endl;
     opendlv::proxy::GroundAccelerationRequest acc;
     acc.groundAcceleration(accelerationRequest);
-    m_od4.send(acc);
+    m_od4.send(acc, sampleTime, m_senderStamp);
   }
   else if(accelerationRequest < 0.0f){
 //std::cout << "Sending decelerationRequest: " << accelerationRequest << std::endl;
     opendlv::proxy::GroundDecelerationRequest dec;
     dec.groundDeceleration(-accelerationRequest);
-    m_od4.send(dec);
+    m_od4.send(dec, sampleTime, m_senderStamp);
   }
+  m_tock = std::chrono::system_clock::now();
+  std::chrono::duration<double> dur = m_tock-m_tick;
+  m_newClock = true;
+  std::cout<<"Track Module Time: "<<dur.count()<<std::endl;
+  //std::cout<<"Track send: "<<" headingRequest: "<<headingRequest<<" accelerationRequest: "<<accelerationRequest<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<std::endl;
 }
 
 
@@ -537,6 +568,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
     // If the path is too short, place aimpoint at the last path element
     else {
       aimPoint = localPath.row(localPath.rows()-1);
+      std::cout << "aimpoint placed on last path element" << '\n';
     }
   }
   // Angle to aimpoint
@@ -549,9 +581,6 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   }
 
   float distanceToAimPoint=aimPoint.norm();
-  //std::cout << "AimPoint: "<<aimPoint<<"\n";
-  //std::cout << "distanceToAimPoint: "<<distanceToAimPoint<<"\n";
-
 
   return std::make_tuple(headingRequest,distanceToAimPoint);
 }

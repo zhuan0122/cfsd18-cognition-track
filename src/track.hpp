@@ -25,6 +25,7 @@
 #include <Eigen/Dense>
 #include <map>
 #include <chrono>
+#include <thread>
 
 class Track {
  public:
@@ -38,7 +39,7 @@ class Track {
   void setUp(std::map<std::string, std::string> commandlineArguments);
   void tearDown();
 
-  void collectAndRun(std::map< double, std::vector<float> >);
+  void collectAndRun();//std::map< double, std::vector<float> >
   Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
   Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
   std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
@@ -49,6 +50,7 @@ class Track {
 
   /* commandlineArguments */
   cluon::OD4Session &m_od4;
+  int m_senderStamp{221};
   // path
   double m_receiveTimeLimit{0.01};
   float m_distanceBetweenPoints{0.5f};
@@ -93,6 +95,9 @@ class Track {
   std::chrono::time_point<std::chrono::system_clock> m_timeReceived;
   int m_lastObjectId;
   bool m_newId;
+  std::chrono::time_point<std::chrono::system_clock> m_tick;
+  std::chrono::time_point<std::chrono::system_clock> m_tock;
+  bool m_newClock;
 };
 
 #endif

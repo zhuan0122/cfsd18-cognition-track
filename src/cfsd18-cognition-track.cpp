@@ -35,14 +35,22 @@ int32_t main(int32_t argc, char **argv) {
     std::cerr << "Example: " << argv[0] << "--cid=111 --id=120 --maxSteering=25.0 --maxAcceleration=5.0 --maxDeceleration=5.0" <<  std::endl;
     retCode = 1;
   } else {
-    uint32_t const detectconelaneStamp=(commandlineArguments["id"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["id"])) : (0);
+    uint32_t const surfaceStamp=(commandlineArguments["surfaceStamp"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["surfaceStamp"])) : (0);
+    uint32_t const speedStamp=(commandlineArguments["speedStamp"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedStamp"])) : (0);
 
     // Interface to a running OpenDaVINCI session
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     Track track(commandlineArguments, od4);
 
-    auto trackEnvelope{[&surfer = track, senderStamp = detectconelaneStamp](cluon::data::Envelope &&envelope)
+    auto surfaceEnvelope{[&surfer = track, senderStamp = surfaceStamp](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          surfer.nextContainer(envelope);
+        }
+      }
+    };
+    auto speedEnvelope{[&surfer = track, senderStamp = speedStamp](cluon::data::Envelope &&envelope)
       {
         if(envelope.senderStamp() == senderStamp){
           surfer.nextContainer(envelope);
@@ -50,8 +58,9 @@ int32_t main(int32_t argc, char **argv) {
       }
     };
 
-    od4.dataTrigger(opendlv::logic::perception::GroundSurfaceProperty::ID(),trackEnvelope);
-    od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),trackEnvelope);
+    od4.dataTrigger(opendlv::logic::perception::GroundSurfaceProperty::ID(),surfaceEnvelope);
+    od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
+    od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
