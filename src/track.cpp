@@ -48,7 +48,7 @@ Track::~Track()
 }
 void Track::setUp(std::map<std::string, std::string> commandlineArguments)
 {
-  m_senderStamp=(commandlineArguments["senderStamp"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["senderStamp"]))) : (m_senderStamp);
+  m_senderStamp=(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (m_senderStamp);
   // path
   m_receiveTimeLimit=(commandlineArguments["receiveTimeLimit"].size() != 0) ? (static_cast<double>(std::stod(commandlineArguments["receiveTimeLimit"]))) : (m_receiveTimeLimit); //TODO do we really need to static cast a stof to float?
   m_distanceBetweenPoints=(commandlineArguments["distanceBetweenPoints"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["distanceBetweenPoints"]))) : (m_distanceBetweenPoints);
