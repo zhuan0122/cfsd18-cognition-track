@@ -12,6 +12,7 @@ addons:
     update: true
 env:
   global:
+  - BRANCH=${TRAVIS_BRANCH}
   - COMMIT=${TRAVIS_COMMIT::7}
   - DOCKERHUB='chalmersfsd'
   - IMAGE=`echo ${TRAVIS_REPO_SLUG#*/}`
@@ -20,13 +21,14 @@ env:
   - secure: CiGmkSaZjBhotEEukha1JAHf3Pmfec+VTLCF9UOAQ4Jta4FuAIKopq0srZb2Pzcz6SdVvFCSXmIwH2juUD+u8pm0tA2Pvoa7Z/W5sby2nYjAhzWuL0B+4rD75aBuKIzP5AQrLsLjkA5H0ZliD1e78gQ3oFJ9YTeDuDWOcT7Of9TOAN1mjai999NmnjkkGRm9u4ycXQVFdPBiG4bcvK0yn6xFgl/VXjuxoxD+0zN9aRxaSJq1+oQGG0KM83egbr4uh+wSWWkIbPmzOjgO71tQ3ZvVB8pfTSqSi5sAsDJAzBgYLTDgFpCyteXcNGSBG3eoOUuR9RPIlQ6yqAkVHl6fa8LEYARqofecv7oig0cmGcv6UkyD+RWvbutS6gcRmAGGMbf2NyWI4n7XzBoa7zflC0PZOj5C1HaoRfNlM1onunba2hOnm0O9DsgCC73Fy1Puh/whVez2z/8tPFoPrfG2O8bMXH0T1QHnRbiJ0qqA0smmTSJ3SdXxJJrWVLU8rap0TeWi4F0ftrQF/XasA8M83SqY8xZfOKNxbrld1RZ7xCIILs+U/53bd2Plj4qMxTQ7xbLG+HkjQl4Pg8gGlPFttXg+patYhZn7PApzHQOhLJhGlYOaoexASIlnHfgy6tweoRUpAgna3rZi2bXOeT7VZwNNcLyTEWq6KXEkJGzg3nI=
   - secure: Od6GV2cWdvqI1xiogF4w6b+kAXy8R4WitCgGQbTZF6LvJc3SWsGofppif/MzL783T5YCrvFZPAFpO0/Fg1EsaV82GoswNuiGRzDWVWCVyNhNtxbBIymzrujF8xNabd6gBo0Gz6QcdbgGBJu03NiWGcp+0yp15SqvPbbr6jzXimD9cvHL0L6FXbPt3CD9s9KzJunB5niFIW7qZv35Rzhf0QXPD9weUeWMpE+H2nMtlO87owW544MAh4AB/HcjCVYYYqHNdSZWrOwhlTenDZqBDdQLOq9oYRVvy/HMBMsAyaomMC+zA8l0eoFyBGbKgMNnUNtQodsCr4O1r+gIHEifKcTs8RJjA09tJfh/pTcWWnipqp3vGoqVsUcgJ/6Lo6fKbxPmF61JvauLKE1ir9CLuX1kge5UpaqmMuKmK5cpwxMUWfi/V95Bcg6ldtq8ZA+ceNLPw/9JOxuhVaIXRHYBR3oOd7M8Ma7KZncVDK40skRTq3cj+jk59EWUwQrNP6KVjdbOFayzoA/uXkppGqDwtSPGsxG4ci0RnbO1BkaBQRqNR06rxiFABM15Iek+YcQF0HJNkb2VbWG19RZUvWAd4khV23rBOKAsrbu0O20EtZGueeYoAFizw5nP0MrA9YZ3CA6iMSpnenCwoDy/PUOCPuyhOyv2+G0pyspspuwy9H8=
 install:
-- docker build -f Dockerfile.amd64 -t ${IMAGE}:${COMMIT} .
+- docker build -f Dockerfile.amd64 -t ${IMAGE}:${BRANCH}-${COMMIT} .
 script: skip
 after_success:
 - docker --version
 - echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-- docker tag ${IMAGE}:${COMMIT} ${DOCKERHUB}/${IMAGE}:${COMMIT}
-- docker push ${DOCKERHUB}/${IMAGE}:${COMMIT}
+- docker tag ${IMAGE}:${BRANCH}-${COMMIT} ${DOCKERHUB}/${IMAGE}:${BRANCH}-${COMMIT}
+- docker push ${DOCKERHUB}/${IMAGE}:${BRANCH}-${COMMIT}
+- echo "${DOCKERHUB}/${IMAGE}:${BRANCH}-${COMMIT}"
 notifications:
   email:
     on_success: never
