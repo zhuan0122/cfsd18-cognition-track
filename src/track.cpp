@@ -22,6 +22,7 @@
 #include <thread>
 #include "track.hpp"
 #include <chrono>
+//#include "interpolation.h"
 
 Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4),
@@ -39,7 +40,10 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_newId{true},
   m_tick{},
   m_tock{},
-  m_newClock{true}
+  m_newClock{true},
+  m_brakingState{false},
+  m_accelerationState{false},
+  m_rollingState{true}
 {
  setUp(commandlineArguments);
 }
@@ -75,6 +79,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_step=(commandlineArguments["curvEstStepsize"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["curvEstStepsize"]))) : (m_step);
   m_polyDeg=(commandlineArguments["polynomialDegree"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["polynomialDegree"]))) : (m_polyDeg);
   m_pointsPerSegment=(commandlineArguments["pointsPerPolySegment"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["pointsPerPolySegment"]))) : (m_pointsPerSegment);
+  m_segmentizePolyfit=(commandlineArguments["segmentizePolyfit"].size() != 0) ? (std::stoi(commandlineArguments["segmentizePolyfit"])==1) : (false);
   // vehicle specific
   m_wheelAngleLimit=(commandlineArguments["wheelAngleLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelAngleLimit"]))) : (m_wheelAngleLimit);
   m_wheelBase=(commandlineArguments["wheelBase"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelBase"]))) : (m_wheelBase);
@@ -240,7 +245,6 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
 
 void Track::collectAndRun(){
   //std::cout<<"enter collectAndRun"<<"\n";
-
   std::map< double, std::vector<float> > surfaceFrame;
   {
   std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
@@ -252,7 +256,6 @@ void Track::collectAndRun(){
     m_newId = true; // Allow for new messages to be placed in m_surfaceFrame
     //std::cout << "Cleared buffer " <<std::endl;
   }
-
 
   std::vector<float> v;
   Eigen::MatrixXf localPath(surfaceFrame.size()*2,2);
@@ -272,87 +275,92 @@ void Track::collectAndRun(){
   // Remove negative path points
   bool preSet = false;
   bool STOP = false;
-  if (localPath(0,0)<0.0f && localPath.rows()>0) {
-    int count = 0;
-    while (localPath(count,0)<0.0f){
-        count++;
-        if (count>localPath.rows()-1) {
-          STOP = true;
-          preSet = true;
-          localPath.resize(1,2);
-          localPath <<  1, 0;
-          break;
-        }
-    }
-    if (!preSet) {
-      Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
-      localPath.resize(localPath.rows()-count,2);
-      localPath = localPathTmp;
-    }
-  }
-  if (!preSet) {
-    // Check for stop or "one point" signal
-    if(localPath.rows() > 1){
-      if (std::abs(localPath(1,0)) <= 0.0001f && std::abs(localPath(1,1)) <= 0.0001f) {
-        Eigen::MatrixXf localPathTmp = localPath.row(0);
-        localPath.resize(1,2);
-        localPath = localPathTmp;
-        STOP = true;
-        std::cout << "STOP signal recieved " << std::endl;
-      }
-      else if(std::abs(localPath(0,0)) <= 0.0001f && std::abs(localPath(0,1)) <= 0.0001f && localPath.rows()<3){
-        Eigen::MatrixXf localPathTmp = localPath.row(1);
-        localPath.resize(1,2);
-        localPath = localPathTmp;
-        std::cout << "ONE POINT signal recieved " << std::endl;
-      }
-      else { //Place equidistant points
-
-        Eigen::MatrixXf localPathCopy;
-        if (m_traceBack){
-          Eigen::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
-          localPathCopy.resize(localPath.rows()+1,2);
-          localPathCopy.row(0) = firstPoint;
-          localPathCopy.block(1,0,localPath.rows(),2) = localPath;
-          localPath.resize(localPathCopy.rows(),2);
-        } else{
-          localPathCopy = localPath;
-        }
-        localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
-      }
-    } //else Only one point remaining
-  }
-  //std::cout<<"localPath: "<<localPath<<"\n";
-  float groundSpeedCopy;
-  {
-    std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
-    groundSpeedCopy = m_groundSpeed;
-  }
-  float previewDistance = std::abs(groundSpeedCopy)*m_previewTime;
-  float pathLength=localPath.row(0).norm();
-  if(localPath.rows()>1){
-    for (int i = 0; i < localPath.rows()-1; i++) {
-      pathLength+=(localPath.row(i+1)-localPath.row(i)).norm();
-    }
-  }
-  if (previewDistance>pathLength) {
-    //std::cout<<"previewDistance "<< previewDistance <<" is longer than pathLength "<<pathLength<<std::endl;
-    previewDistance = pathLength;
-  }
-
   float headingRequest;
   float distanceToAimPoint;
-  if (m_sharp) {
-    headingRequest = Track::driverModelSharp(localPath, previewDistance);
-    distanceToAimPoint = 3.0f;
-  }
-  else{
-    auto steering = Track::driverModelSteering(localPath, groundSpeedCopy, m_previewTime);
-    headingRequest = std::get<0>(steering);
-    distanceToAimPoint = std::get<1>(steering);
-  }
-  float accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, m_velocityLimit, m_axLimitPositive, m_axLimitNegative, headingRequest, m_headingErrorDependency, m_mu, STOP);
+  float accelerationRequest;
+  std::cout<<"localPath.rows(): "<<localPath.rows()<<std::endl;
+  if (localPath.rows()>0){
+    if (localPath(0,0)<0.0f) {
+      int count = 0;
+      while (localPath(count,0)<0.0f){
+          count++;
+          if (count>localPath.rows()-1) {
+            STOP = true;
+            preSet = true;
+            localPath.resize(1,2);
+            localPath <<  1, 0;
+            break;
+          }
+      }
+      if (!preSet) {
+        Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
+        localPath.resize(localPath.rows()-count,2);
+        localPath = localPathTmp;
+      }
+    }
+    if (!preSet) {
+      // Check for stop or "one point" signal
+      if(localPath.rows() > 1){
+        if (std::abs(localPath(1,0)) <= 0.0001f && std::abs(localPath(1,1)) <= 0.0001f) {
+          Eigen::MatrixXf localPathTmp = localPath.row(0);
+          localPath.resize(1,2);
+          localPath = localPathTmp;
+          STOP = true;
+          std::cout << "STOP signal recieved " << std::endl;
+        }
+        else if(std::abs(localPath(0,0)) <= 0.0001f && std::abs(localPath(0,1)) <= 0.0001f && localPath.rows()<3){
+          Eigen::MatrixXf localPathTmp = localPath.row(1);
+          localPath.resize(1,2);
+          localPath = localPathTmp;
+          std::cout << "ONE POINT signal recieved " << std::endl;
+        }
+        else { //Place equidistant points
 
+          Eigen::MatrixXf localPathCopy;
+          if (m_traceBack){
+            Eigen::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
+            localPathCopy.resize(localPath.rows()+1,2);
+            localPathCopy.row(0) = firstPoint;
+            localPathCopy.block(1,0,localPath.rows(),2) = localPath;
+            localPath.resize(localPathCopy.rows(),2);
+          } else{
+            localPathCopy = localPath;
+          }
+          localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
+        }
+      } //else Only one point remaining
+    }
+    float groundSpeedCopy;
+    {
+      std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
+      groundSpeedCopy = m_groundSpeed;
+    }
+    if (m_sharp) {
+      float previewDistance = std::abs(groundSpeedCopy)*m_previewTime;
+      float pathLength=localPath.row(0).norm();
+      if(localPath.rows()>1){
+        for (int i = 0; i < localPath.rows()-1; i++) {
+          pathLength+=(localPath.row(i+1)-localPath.row(i)).norm();
+        }
+      }
+      if (previewDistance>pathLength) {
+        //std::cout<<"previewDistance "<< previewDistance <<" is longer than pathLength "<<pathLength<<std::endl;
+        previewDistance = pathLength;
+      }
+      headingRequest = Track::driverModelSharp(localPath, previewDistance);
+      distanceToAimPoint = 3.0f; //TODO only for plot
+    }
+    else{
+      auto steering = Track::driverModelSteering(localPath, groundSpeedCopy, m_previewTime);
+      headingRequest = std::get<0>(steering);
+      distanceToAimPoint = std::get<1>(steering);
+    }
+    accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, m_velocityLimit, m_axLimitPositive, m_axLimitNegative, headingRequest, m_headingErrorDependency, m_mu, STOP);
+  }else{
+    headingRequest=0.0f;
+    distanceToAimPoint=1.0f;
+    accelerationRequest=0.0f;
+  }
 //std::cout << "Sending headingRequest: " << headingRequest << std::endl;
 std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
 cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
@@ -593,6 +601,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         distanceP1AimPoint = distanceP1P2 - overshoot;
         aimPoint = localPath.row(0)*(distanceP1AimPoint/distanceP1P2);*/
         aimPoint = localPath.row(0);
+        std::cout << "aimpoint placed on first path element" << '\n';
       }
     }
     // If the path is too short, place aimpoint at the last path element
@@ -611,6 +620,11 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   }
 
   float distanceToAimPoint=aimPoint.norm();
+  if (distanceToAimPoint>5.0f) { //TODO debug only
+    std::cout<<"distanceToAimPoint: "<<distanceToAimPoint<<std::endl;
+    std::cout<<"aimPoint: "<<aimPoint<<std::endl;
+    std::cout<<"localPath: "<<localPath<<std::endl;
+  }
 
   return std::make_tuple(headingRequest,distanceToAimPoint);
 }
@@ -642,7 +656,6 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         }
         curveRadii = curvatureTriCircle(localPath,step);
       }
-
     /*int index = floor(previewDistance/m_distanceBetweenPoints); //This section calculates the angle to the last path point
     if (index>localPath.rows()-1) {
       index = localPath.rows()-1;
@@ -669,7 +682,6 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     {
       std::cout<<curveRadii[i]<<std::endl;
     }*/
-
 
     //float brakeMetersBefore = 4;
     //int K = round(brakeMetersBefore/m_distanceBetweenPoints);
@@ -723,6 +735,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         std::cout<<"accelerationRequest 1 is NaN, ay = "<<ay<<std::endl;
         accelerationRequest = 0.0f;
       }*/
+      m_brakingState = true;
     }
     else if (brakeTime>0.0f && brakeTime<=0.3f){//braking is critical soon, brake prematurely
       /*if (idx-K>=0 && curveRadii[idx]<10.0f) {
@@ -766,7 +779,6 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       }
 
     }
-
     /*---------------------------------------------------------------------------*/
     /*// Back propagate the whole path and lower velocities if deceleration cannot
     // be achieved. //TODO not pow g*mu
@@ -845,8 +857,8 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
 
 std::vector<float> Track::curvatureTriCircle(Eigen::MatrixXf localPath, int step){
   // Segmentize the path and calculate radius of segments
-  // - First radius is calculated at 2nd path point
-  // - Last radius is calculated at 2nd to last path point
+  // - First radius is calculated at path point "step"
+  // - Last radius is calculated at end-step path point
   // Note! 3 points in a row gives infinate radius.
   std::vector<float>  curveRadii(localPath.rows()-(2*step));
   for (int k = 0; k < localPath.rows()-(2*step); k++) {
@@ -887,13 +899,15 @@ std::vector<float> Track::curvatureTriCircle(Eigen::MatrixXf localPath, int step
   return curveRadii;
 }
 
-std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: double check coordinate system, maybe switch x/y
-  auto startPoly = std::chrono::system_clock::now();
-// TODO: Fix commandlineArguments for all configuration stuff
+std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
+  //auto startPoly = std::chrono::system_clock::now();
   int n = m_polyDeg;
   int pointsPerSegment = m_pointsPerSegment;
   int i,j,segments,N;
   int k=0;
+  int segmentcount = 0; //TODO: only for plot
+  bool BREAK=false;
+
   uint32_t l=0;
   Eigen::VectorXf dividedPathX(localPath.rows()); // TODO: This is now maximum possible size, which in some cases is unneccesary
   Eigen::VectorXf dividedPathY(localPath.rows());
@@ -910,6 +924,9 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: 
           dividedPathsX.push_back(dividedPathX.segment(0,k));
           dividedPathsY.push_back(dividedPathY.segment(0,k));
           k=0;
+          if (!m_segmentizePolyfit) {
+            BREAK = true;
+          }
         }
     }
     while ((localPath(l,0) < localPath(l+1,0)) && l < localPath.rows()-2){ //While X increasing
@@ -921,10 +938,15 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: 
           dividedPathsX.push_back(dividedPathX.segment(0,k));
           dividedPathsY.push_back(dividedPathY.segment(0,k));;
           k=0;
+          if (!m_segmentizePolyfit) {
+            BREAK = true;
+          }
         }
     }
+    if (BREAK) {
+      break;
+    }
   }
-
   std::vector<float> curveRadii;
   std::vector<float> R;
   Eigen::VectorXf pathx;
@@ -934,15 +956,21 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: 
   Eigen::VectorXf a(n+1);
   int segmentBegin;
   int segmentLength = pointsPerSegment;
-
+  std::cout<<"dividedPathsX.size(): "<<dividedPathsX.size()<<std::endl;
   for (uint32_t P=0; P<dividedPathsX.size(); P++) {
     pathx = dividedPathsX[P];
     pathy = dividedPathsY[P];
+    //std::cout<<"pathx: "<<pathx<<std::endl;
+    //std::cout<<"pathy: "<<pathy<<std::endl;
     N = pointsPerSegment; // number of path points per segment
     if (pathx.size()<N) {
       N = pathx.size();
     }
-    segments = pathx.size()/N; //number of segments
+    if (m_segmentizePolyfit) {
+      segments = pathx.size()/N; //number of segments
+    }else{
+      segments=1;
+    }
 
     for (int p=0; p<segments; p++){
       if ((p<segments-1) || (!(segments*N<pathx.size())) ){
@@ -954,61 +982,133 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){ // TODO: 
        segmentLength = N+pathx.size()-N*segments;
        N = segmentLength;
       }
-      x = pathx.segment(segmentBegin,segmentLength).array()-x(0);
-      y = pathy.segment(segmentBegin,segmentLength).array()-y(0);
+      std::cout<<"N: "<<N<<std::endl;
+      std::cout<<"p: "<<p<<std::endl;
+      std::cout<<"P: "<<P<<std::endl;
+      std::cout<<"segments: "<<segments<<std::endl;
+      x = pathx.segment(segmentBegin,segmentLength).array()-pathx(segmentBegin);
+      y = pathy.segment(segmentBegin,segmentLength).array()-pathy(segmentBegin);
+      //std::cout<<"x: "<<x<<std::endl;
+      //std::cout<<"y: "<<y<<std::endl;
 
       Eigen::VectorXf X(2*n+1);                        //Array that will store the values of sigma(xi),sigma(xi^2),sigma(xi^3)....sigma(xi^2n)
       for (i=0;i<2*n+1;i++){
         X(i)=0;
-        for (j=0;j<N;j++)
-            X(i)=X(i)+powf(x(j),i);        //consecutive positions of the array will store N,sigma(xi),sigma(xi^2),sigma(xi^3)....sigma(xi^2n)
+        for (j=0;j<N;j++){
+          X(i)=X(i)+powf(x(j),i);        //consecutive positions of the array will store N,sigma(xi),sigma(xi^2),sigma(xi^3)....sigma(xi^2n)
+        }
       }
       //B is the Normal matrix(augmented) that will store the equations, 'a' is for value of the final coefficients
       Eigen::MatrixXf B(n+1,n+2);
-      for (i=0;i<=n;i++)
-        for (j=0;j<=n;j++)
-            B(i,j)=X(i+j);            //Build the Normal matrix by storing the corresponding coefficients at the right positions except the last column of the matrix
+      for (i=0;i<=n;i++){
+        for (j=0;j<=n;j++){
+          B(i,j)=X(i+j);            //Build the Normal matrix by storing the corresponding coefficients at the right positions except the last column of the matrix
+        }
+      }
       Eigen::VectorXf Y(n+1);                    //Array to store the values of sigma(yi),sigma(xi*yi),sigma(xi^2*yi)...sigma(xi^n*yi)
       for (i=0;i<n+1;i++){
         Y(i)=0;
-        for (j=0;j<N;j++)
-        Y(i)=Y(i)+powf(x(j),i)*y(j);        //consecutive positions will store sigma(yi),sigma(xi*yi),sigma(xi^2*yi)...sigma(xi^n*yi)
+        for (j=0;j<N;j++){
+          Y(i)=Y(i)+powf(x(j),i)*y(j);        //consecutive positions will store sigma(yi),sigma(xi*yi),sigma(xi^2*yi)...sigma(xi^n*yi)
+        }
       }
-      for (i=0;i<=n;i++)
+      for (i=0;i<=n;i++){
         B(i,n+1)=Y(i);                //load the values of Y as the last column of B(Normal Matrix but augmented)
-
-      for (i=0;i<n+1;i++)                    //From now Gaussian Elimination starts(can be ignored) to solve the set of linear equations (Pivotisation)
-        for (k=i+1;k<n+1;k++)
-            if (B(i,i)<B(k,i))
-                for (j=0;j<=n+1;j++){
-                    float temp=B(i,j);
-                    B(i,j)=B(k,j);
-                    B(k,j)=temp;
-                }
-      for (i=0;i<n;i++)            //loop to perform the gauss elimination
+      }
+      for (i=0;i<n+1;i++){                    //From now Gaussian Elimination starts(can be ignored) to solve the set of linear equations (Pivotisation)
         for (k=i+1;k<n+1;k++){
-                float t=B(k,i)/B(i,i);
-                for (j=0;j<=n+1;j++)
-                    B(k,j)=B(k,j)-t*B(i,j);    //make the elements below the pivot elements equal to zero or elimnate the variables
+          if (B(i,i)<B(k,i)){
+            for (j=0;j<=n+1;j++){
+              float temp=B(i,j);
+              B(i,j)=B(k,j);
+              B(k,j)=temp;
             }
+          }
+        }
+      }
+      for (i=0;i<n;i++){            //loop to perform the gauss elimination
+        for (k=i+1;k<n+1;k++){
+          float t=B(k,i)/B(i,i);
+          for (j=0;j<=n+1;j++){
+            B(k,j)=B(k,j)-t*B(i,j);    //make the elements below the pivot elements equal to zero or elimnate the variables
+          }
+        }
+      }
       for (i=n;i>=0;i--){                //back-substitution
         a(i)=B(i,n+1);                //make the variable to be calculated equal to the rhs of the last equation
-        for (j=0;j<n+1;j++)
-            if (j!=i)            //then subtract all the lhs values except the coefficient of the variable whose value is being calculated
-                a(i)=a(i)-B(i,j)*a(j);
+        for (j=0;j<n+1;j++){
+          if (j!=i){            //then subtract all the lhs values except the coefficient of the variable whose value is being calculated
+            a(i)=a(i)-B(i,j)*a(j);
+          }
+        }
         a(i)=a(i)/B(i,i);            //now finally divide the rhs by the coefficient of the variable to be calculated
       }
 
       R.resize(x.size()); // stores curvatures
       for(uint32_t m=0; m<R.size();m++){
         R[m] = 1/std::abs(2*a(2)+6*a(3)*x(m))/powf(1+powf(a(1)+2*a(2)*x(m)+3*a(3)*powf(x(m),2),2),1.5);
+        if (R[m]<9.0f) {
+          R[m]=9.0f;
+        }
       }
       curveRadii.insert(curveRadii.end(), R.begin(), R.end());
+      /*-------------TODO: remove ONLY FOR PLOT--------------*/
+      if (segmentcount==0) {
+        std::cout<<"a0: "<<a(0)<<" a1: "<<a(1)<<" a2: "<<a(2)<<" a3: "<<a(3)<<std::endl;
+        std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+        cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+        opendlv::body::ActuatorInfo plot;
+        plot.x(a(1));
+        plot.y(a(2));
+        plot.z(a(3));
+        plot.minValue(a(0));//x(0)+pathx(segmentBegin));
+        plot.maxValue(localPath(0,0));//(x(x.size()-1)+pathx(segmentBegin));
+        m_od4.send(plot, sampleTime, 11);
+      }
+      if (m_segmentizePolyfit) {
+        if (segmentcount==1) {
+          std::cout<<"a0: "<<a(0)<<" a1: "<<a(1)<<" a2: "<<a(2)<<" a3: "<<a(3)<<std::endl;
+          std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+          cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+          opendlv::body::ActuatorInfo plot;
+          plot.x(a(1));
+          plot.y(a(2));
+          plot.z(a(3));
+          plot.minValue(a(0));//x(0)+pathx(segmentBegin));
+          plot.maxValue(x(0)+pathx(segmentBegin));//(x(x.size()-1)+pathx(segmentBegin));
+          m_od4.send(plot, sampleTime, 22);
+        }
+        if (segmentcount==2) {
+          std::cout<<"a0: "<<a(0)<<" a1: "<<a(1)<<" a2: "<<a(2)<<" a3: "<<a(3)<<std::endl;
+          std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+          cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+          opendlv::body::ActuatorInfo plot;
+          plot.x(a(1));
+          plot.y(a(2));
+          plot.z(a(3));
+          plot.minValue(a(0));//x(0)+pathx(segmentBegin));
+          plot.maxValue(x(0)+pathx(segmentBegin));//(x(x.size()-1)+pathx(segmentBegin));
+          m_od4.send(plot, sampleTime, 33);
+        }
+        if (segmentcount==3) {
+          std::cout<<"a0: "<<a(0)<<" a1: "<<a(1)<<" a2: "<<a(2)<<" a3: "<<a(3)<<std::endl;
+          std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+          cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+          opendlv::body::ActuatorInfo plot;
+          plot.x(a(1));
+          plot.y(a(2));
+          plot.z(a(3));
+          plot.minValue(a(0));//x(0)+pathx(segmentBegin));
+          plot.maxValue(x(0)+pathx(segmentBegin));//(x(x.size()-1)+pathx(segmentBegin));
+          m_od4.send(plot, sampleTime, 44);
+        }
+        segmentcount++;
+      }
     } // end p-loop
   } // end P-loop
-  auto stopPoly = std::chrono::system_clock::now();
+  /*auto stopPoly = std::chrono::system_clock::now();
   auto timePoly = std::chrono::duration_cast<std::chrono::microseconds>(stopPoly - startPoly);
-  std::cout << "Polyfit Time:" << timePoly.count() << std::endl;
+  std::cout << "Polyfit Time:" << timePoly.count() << std::endl;*/
   std::cout<<"curveRadii: "<<" ";
   for (size_t m = 0; m < curveRadii.size(); m++) {
     std::cout<<curveRadii[m]<<" ";

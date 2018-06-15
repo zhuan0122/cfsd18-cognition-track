@@ -78,6 +78,7 @@ class Track {
   int m_step{5};
   int m_polyDeg{3};
   int m_pointsPerSegment{15};
+  bool m_segmentizePolyfit{false};
   // vehicle specific
   float m_wheelAngleLimit{20.0f};
   float m_wheelBase{1.53f};
@@ -99,6 +100,9 @@ class Track {
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;
+  bool m_brakingState;
+  bool m_accelerationState;
+  bool m_rollingState;
 };
 
 #endif
