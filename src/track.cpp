@@ -90,6 +90,36 @@ void Track::tearDown()
 {
 }
 
+void Track::recieveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea> currentFrame){
+  //Eigen::MatrixXd extractedCones(3,currentFrame.size());
+  std::map< double, std::vector<float> > surfaceFrame;
+  std::map<int,opendlv::logic::perception::GroundSurfaceArea>::iterator it;
+  it = currentFrame.begin();
+  while(it != currentFrame.end()){
+    auto surfaceArea = it->second;
+    float x1 = surfaceArea.x1(); //Unpack message
+    float y1 = surfaceArea.y1();
+    float x2 = surfaceArea.x2();
+    float y2 = surfaceArea.y2();
+    float x3 = surfaceArea.x3();
+    float y3 = surfaceArea.y3();
+    float x4 = surfaceArea.x4();
+    float y4 = surfaceArea.y4();
+
+    std::vector<float> v(4);
+    v[0] = (x1+x2)/2.0f;
+    v[1] = (y1+y2)/2.0f;
+    v[2] = (x3+x4)/2.0f;
+    v[3] = (y3+y4)/2.0f;
+
+    surfaceFrame[static_cast<double>(it->first)] = v;
+    it++;
+  }
+  m_surfaceFrame = surfaceFrame;
+
+  Track::collectAndRun();
+} // End of recieveCombinedMessage
+
 void Track::nextContainer(cluon::data::Envelope &a_container)
 {
   if (a_container.dataType() == opendlv::proxy::GroundSpeedReading::ID()) {

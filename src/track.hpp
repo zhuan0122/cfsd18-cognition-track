@@ -33,6 +33,7 @@ class Track {
   Track(Track const &) = delete;
   Track &operator=(Track const &) = delete;
   virtual ~Track();
+  void recieveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea>);
   void nextContainer(cluon::data::Envelope &);
 
  private:

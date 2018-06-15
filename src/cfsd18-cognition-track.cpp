@@ -18,6 +18,7 @@
 #include "cluon-complete.hpp"
 #include "opendlv-standard-message-set.hpp"
 #include "track.hpp"
+#include "collector.hpp"
 #include <Eigen/Dense>
 #include <cstdint>
 #include <tuple>
@@ -42,11 +43,14 @@ int32_t main(int32_t argc, char **argv) {
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     Track track(commandlineArguments, od4);
+    int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(10); 
 
-    auto surfaceEnvelope{[&surfer = track, senderStamp = surfaceId](cluon::data::Envelope &&envelope)
+    Collector collector(track,gatheringTimeMs,1);
+
+    auto surfaceEnvelope{[senderStamp = surfaceId,&collector](cluon::data::Envelope &&envelope)
       {
         if(envelope.senderStamp() == senderStamp){
-          surfer.nextContainer(envelope);
+          collector.CollectSurfaces(envelope);
         }
       }
     };
@@ -58,7 +62,6 @@ int32_t main(int32_t argc, char **argv) {
       }
     };
 
-    od4.dataTrigger(opendlv::logic::perception::GroundSurfaceProperty::ID(),surfaceEnvelope);
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
     od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
 

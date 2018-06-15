@@ -83,7 +83,7 @@ set(LIBRARIES Threads::Threads)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-add_library(${PROJECT_NAME}-core ${CMAKE_CURRENT_SOURCE_DIR}/src/track.cpp ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.cpp)
+add_library(${PROJECT_NAME}-core ${CMAKE_CURRENT_SOURCE_DIR}/src/track.cpp ${CMAKE_CURRENT_SOURCE_DIR}/src/collector.cpp ${CMAKE_BINARY_DIR}/opendlv-standard-message-set.cpp)
 
 ################################################################################
 # Create executable.
