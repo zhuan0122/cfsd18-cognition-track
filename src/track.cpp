@@ -43,7 +43,8 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_newClock{true},
   m_brakingState{false},
   m_accelerationState{false},
-  m_rollingState{true}
+  m_rollingState{true},
+  m_sendMutex()
 {
  setUp(commandlineArguments);
 }
@@ -95,8 +96,9 @@ void Track::tearDown()
 {
 }
 
-void Track::recieveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea> currentFrame){
+void Track::receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea> currentFrame){
   //Eigen::MatrixXd extractedCones(3,currentFrame.size());
+  m_tick = std::chrono::system_clock::now();
   std::map< double, std::vector<float> > surfaceFrame;
   std::map<int,opendlv::logic::perception::GroundSurfaceArea>::iterator it;
   it = currentFrame.begin();
@@ -362,31 +364,34 @@ void Track::collectAndRun(){
     accelerationRequest=0.0f;
   }
 //std::cout << "Sending headingRequest: " << headingRequest << std::endl;
-std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
-cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
-  opendlv::logic::action::AimPoint steer;
-  steer.azimuthAngle(headingRequest);
-  steer.distance(distanceToAimPoint);
-  m_od4.send(steer, sampleTime, m_senderStamp);
+  {
+    std::unique_lock<std::mutex> lockSend(m_sendMutex);
+    std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+    cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+    opendlv::logic::action::AimPoint steer;
+    steer.azimuthAngle(headingRequest);
+    steer.distance(distanceToAimPoint);
+    m_od4.send(steer, sampleTime, m_senderStamp);
 
-  if (accelerationRequest >= 0.0f) {
-//std::cout << "Sending accelerationRequest: " << accelerationRequest << std::endl;
-    opendlv::proxy::GroundAccelerationRequest acc;
-    acc.groundAcceleration(accelerationRequest);
-    m_od4.send(acc, sampleTime, m_senderStamp);
-  }
-  else if(accelerationRequest < 0.0f){
-//std::cout << "Sending decelerationRequest: " << accelerationRequest << std::endl;
-    opendlv::proxy::GroundDecelerationRequest dec;
-    dec.groundDeceleration(-accelerationRequest);
-    m_od4.send(dec, sampleTime, m_senderStamp);
-  }
-  m_tock = std::chrono::system_clock::now();
-  std::chrono::duration<double> dur = m_tock-m_tick;
-  m_newClock = true;
-  std::cout<<"Track Module Time: "<<dur.count()<<std::endl;
-  //std::cout<<"Track send: "<<" headingRequest: "<<headingRequest<<" accelerationRequest: "<<accelerationRequest<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<std::endl;
-}
+    if (accelerationRequest >= 0.0f) {
+  //std::cout << "Sending accelerationRequest: " << accelerationRequest << std::endl;
+      opendlv::proxy::GroundAccelerationRequest acc;
+      acc.groundAcceleration(accelerationRequest);
+      m_od4.send(acc, sampleTime, m_senderStamp);
+    }
+    else if(accelerationRequest < 0.0f){
+  //std::cout << "Sending decelerationRequest: " << accelerationRequest << std::endl;
+      opendlv::proxy::GroundDecelerationRequest dec;
+      dec.groundDeceleration(-accelerationRequest);
+      m_od4.send(dec, sampleTime, m_senderStamp);
+    }
+    m_tock = std::chrono::system_clock::now();
+    std::chrono::duration<double> dur = m_tock-m_tick;
+    m_newClock = true;
+    std::cout<<"Track Module Time: "<<dur.count()<<std::endl;
+    //std::cout<<"Track send: "<<" headingRequest: "<<headingRequest<<" accelerationRequest: "<<accelerationRequest<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<std::endl;
+  } //end mutex scope
+}//end collectAndRun
 
 
 Eigen::RowVector2f Track::traceBackToClosestPoint(Eigen::RowVector2f p1, Eigen::RowVector2f p2, Eigen::RowVector2f q)
@@ -618,7 +623,14 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   } else {
     headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
   }
-
+  /*std::chrono::system_clock::time_point tp = std::chrono::system_clock::now(); //draw end of path
+  cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+  opendlv::body::ActuatorInfo plot;
+  plot.x(localPath(localPath.rows()-1,0));
+  plot.y(localPath(localPath.rows()-1,1));
+  plot.z(localPath(localPath.rows()-2,0));
+  plot.minValue(localPath(localPath.rows()-2,1));
+  m_od4.send(plot, sampleTime, 55);*/
   float distanceToAimPoint=aimPoint.norm();
   if (distanceToAimPoint>5.0f) { //TODO debug only
     std::cout<<"distanceToAimPoint: "<<distanceToAimPoint<<std::endl;

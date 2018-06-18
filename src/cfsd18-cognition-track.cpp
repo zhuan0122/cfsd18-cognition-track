@@ -43,9 +43,10 @@ int32_t main(int32_t argc, char **argv) {
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     Track track(commandlineArguments, od4);
-    int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(10); 
+    int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(10);
+    int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(10); 
 
-    Collector collector(track,gatheringTimeMs,1);
+    Collector collector(track,gatheringTimeMs, separationTimeMs, 1);
 
     auto surfaceEnvelope{[senderStamp = surfaceId,&collector](cluon::data::Envelope &&envelope)
       {

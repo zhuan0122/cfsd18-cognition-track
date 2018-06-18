@@ -33,7 +33,7 @@ class Track {
   Track(Track const &) = delete;
   Track &operator=(Track const &) = delete;
   virtual ~Track();
-  void recieveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea>);
+  void receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea>);
   void nextContainer(cluon::data::Envelope &);
 
  private:
@@ -103,6 +103,7 @@ class Track {
   bool m_brakingState;
   bool m_accelerationState;
   bool m_rollingState;
+  std::mutex m_sendMutex;
 };
 
 #endif

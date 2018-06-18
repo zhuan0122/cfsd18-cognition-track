@@ -19,10 +19,14 @@
 
 #include "collector.hpp"
 
-Collector::Collector(Track &track,int timeDiffMilliseconds,int packetSize) : 
+Collector::Collector(Track &track,int timeOutMs, int separationTimeMs, int packetSize) :
     m_module(track),
     m_packetSize(packetSize),
-    m_timeDiffMilliseconds(timeDiffMilliseconds)
+    m_timeOutMs(timeOutMs),
+    m_separationTimeMs(separationTimeMs),
+    m_timeReceived(),
+    m_tick{},
+    m_tock{}
 {
 }
 
@@ -50,6 +54,7 @@ void Collector::CollectSurfaces(cluon::data::Envelope data){
     }
     else if(m_newFrame)
     {
+        m_tick = std::chrono::system_clock::now();
         m_numberOfItems = 1;
         m_currentFrame.clear();
         m_envelopeCount.clear();
@@ -63,7 +68,7 @@ void Collector::CollectSurfaces(cluon::data::Envelope data){
             m_envelopeCount[id] = 1;
             m_numberOfItems = (m_numberOfItems<=id)?(id+1):(m_numberOfItems);
         }
-           
+
         std::thread surfaceCollector (&Collector::InitializeCollection,this); //just sleep instead maybe since this is unclear how it works
         surfaceCollector.detach();
     }
@@ -81,12 +86,17 @@ auto start = std::chrono::system_clock::now();
   {
     auto now = std::chrono::system_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(now - start);
+    std::chrono::duration<double> dur = now-m_timeReceived;
     if(m_messageCount == m_numberOfItems*m_packetSize){
         sleep = false;
     }
-    if(elapsed.count() > m_timeDiffMilliseconds*1000){
+    if(elapsed.count() > m_timeOutMs*1000){
         std::cout << "Timed out" << std::endl;
         sleep = false;
+    }
+    if (dur.count()>m_separationTimeMs*0.001) {
+      std::cout << "Separation time exceeded: " <<" dur.count(): "<<dur.count()<<" m_separationTimeMs*0.001 "<<m_separationTimeMs*0.001<<std::endl;
+      sleep = false;
     }
   }
   GetCompleteFrame();
@@ -96,16 +106,20 @@ auto start = std::chrono::system_clock::now();
 
 void Collector::GetCompleteFrame(){
     std::map<int,int>::iterator it2 = m_envelopeCount.begin();
+    std::map<int,opendlv::logic::perception::GroundSurfaceArea> currentFrameCopy = m_currentFrame;
     while(it2 != m_envelopeCount.end()){
         if(it2->second != static_cast<int>(m_packetSize)){
-            m_currentFrame.erase(it2->first);
+            currentFrameCopy.erase(it2->first);
             std::cout << "Incomplete frame with id " << it2->first << " removed" << std::endl;
         }
         it2++;
+    }
+    if (m_currentFrame.size() != currentFrameCopy.size()) {
+      m_currentFrame = currentFrameCopy;
     }
 }
 
 void Collector::SendFrame(){
     std::cout << "sending " << m_currentFrame.size() << " surfaces" << std::endl;
-    m_module.recieveCombinedMessage(m_currentFrame);
+    m_module.receiveCombinedMessage(m_currentFrame);
 }

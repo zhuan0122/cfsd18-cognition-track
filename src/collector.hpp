@@ -31,7 +31,7 @@
 
 class Collector{
   public:
-    Collector(Track &track, int, int);
+    Collector(Track &track, int, int, int);
     ~Collector() = default;
     void CollectSurfaces(cluon::data::Envelope data);
     void InitializeCollection();
@@ -40,14 +40,18 @@ class Collector{
 
   private:
     cluon::data::TimeStamp m_currentFrameTime = {};
-    std::map<int,opendlv::logic::perception::GroundSurfaceArea> m_currentFrame = {}; 
+    std::map<int,opendlv::logic::perception::GroundSurfaceArea> m_currentFrame = {};
     std::map<int,int> m_envelopeCount = {};
     bool m_newFrame = true;
     bool m_processing = false;
     uint32_t m_messageCount = 0;
     Track &m_module;
     uint32_t m_packetSize;
-    int m_timeDiffMilliseconds;
+    int m_timeOutMs;
+    int m_separationTimeMs;
+    std::chrono::time_point<std::chrono::system_clock> m_timeReceived;
+    std::chrono::time_point<std::chrono::system_clock> m_tick;
+    std::chrono::time_point<std::chrono::system_clock> m_tock;
     uint32_t m_numberOfItems = 1;
 };
 
