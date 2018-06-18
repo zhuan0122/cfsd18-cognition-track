@@ -100,9 +100,11 @@ void Track::receiveCombinedMessage(std::map<int,opendlv::logic::perception::Grou
   //Eigen::MatrixXd extractedCones(3,currentFrame.size());
   m_tick = std::chrono::system_clock::now();
   std::map< double, std::vector<float> > surfaceFrame;
-  std::map<int,opendlv::logic::perception::GroundSurfaceArea>::iterator it;
-  it = currentFrame.begin();
-  while(it != currentFrame.end()){
+  std::reverse_iterator<std::map<int,opendlv::logic::perception::GroundSurfaceArea>::iterator> it;
+  it = currentFrame.rbegin();
+  int I = 0;
+  Eigen::MatrixXf localPath(currentFrame.size()*2,2);
+  while(it != currentFrame.rend()){
     auto surfaceArea = it->second;
     float x1 = surfaceArea.x1(); //Unpack message
     float y1 = surfaceArea.y1();
@@ -113,18 +115,22 @@ void Track::receiveCombinedMessage(std::map<int,opendlv::logic::perception::Grou
     float x4 = surfaceArea.x4();
     float y4 = surfaceArea.y4();
 
-    std::vector<float> v(4);
+    /*std::vector<float> v(4);
     v[0] = (x1+x2)/2.0f;
     v[1] = (y1+y2)/2.0f;
     v[2] = (x3+x4)/2.0f;
-    v[3] = (y3+y4)/2.0f;
-
-    surfaceFrame[static_cast<double>(it->first)] = v;
+    v[3] = (y3+y4)/2.0f;*/
+    localPath(2*I,0)=(x1+x2)/2.0f;;
+    localPath(2*I,1)=(y1+y2)/2.0f;
+    localPath(2*I+1,0)=(x3+x4)/2.0f;
+    localPath(2*I+1,1)=(y3+y4)/2.0f;;
+    //surfaceFrame[static_cast<double>(it->first)] = v;
     it++;
+    I++;
   }
-  m_surfaceFrame = surfaceFrame;
+  //m_surfaceFrame = surfaceFrame;
 
-  Track::collectAndRun();
+  Track::run(localPath);
 } // End of recieveCombinedMessage
 
 void Track::nextContainer(cluon::data::Envelope &a_container)
@@ -238,15 +244,16 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
         v=it->second;
         std::cout<<v[0]<<" "<<v[1]<<" "<<v[2]<<" "<<v[3]<<std::endl;
       }*/
-      std::thread surfaceCollector(&Track::collectAndRun, this); // Run the surface in a thread
+      Eigen::MatrixXf localPath;
+      std::thread surfaceCollector(&Track::run, this, localPath); // Run the surface in a thread
       surfaceCollector.detach();
     }
   }
 }
 
 
-void Track::collectAndRun(){
-  //std::cout<<"enter collectAndRun"<<"\n";
+void Track::run(Eigen::MatrixXf localPath){
+  //std::cout<<"enter run"<<"\n";
   std::map< double, std::vector<float> > surfaceFrame;
   {
   std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
@@ -259,7 +266,7 @@ void Track::collectAndRun(){
     //std::cout << "Cleared buffer " <<std::endl;
   }
 
-  std::vector<float> v;
+  /*std::vector<float> v;
   Eigen::MatrixXf localPath(surfaceFrame.size()*2,2);
   //std::cout<<"localPath.rows(): "<<localPath.rows()<<"\n";
   {
@@ -273,14 +280,14 @@ void Track::collectAndRun(){
       localPath(2*I+1,1)=v[3];
       I++;
     }
-  }
+  }*/
   // Remove negative path points
   bool preSet = false;
   bool STOP = false;
   float headingRequest;
   float distanceToAimPoint;
   float accelerationRequest;
-  std::cout<<"localPath.rows(): "<<localPath.rows()<<std::endl;
+  //std::cout<<"localPath.rows(): "<<localPath.rows()<<std::endl;
   if (localPath.rows()>0){
     if (localPath(0,0)<0.0f) {
       int count = 0;
@@ -391,7 +398,7 @@ void Track::collectAndRun(){
     std::cout<<"Track Module Time: "<<dur.count()<<std::endl;
     //std::cout<<"Track send: "<<" headingRequest: "<<headingRequest<<" accelerationRequest: "<<accelerationRequest<<" sampleTime: "<<cluon::time::toMicroseconds(sampleTime)<<std::endl;
   } //end mutex scope
-}//end collectAndRun
+}//end run
 
 
 Eigen::RowVector2f Track::traceBackToClosestPoint(Eigen::RowVector2f p1, Eigen::RowVector2f p2, Eigen::RowVector2f q)

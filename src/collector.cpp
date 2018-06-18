@@ -33,6 +33,7 @@ Collector::Collector(Track &track,int timeOutMs, int separationTimeMs, int packe
 void Collector::CollectSurfaces(cluon::data::Envelope data){
     cluon::data::TimeStamp ts = data.sampleTimeStamp();
     int64_t delta = cluon::time::deltaInMicroseconds(ts,m_currentFrameTime);
+    m_timeReceived = std::chrono::system_clock::now();
     if(std::abs(delta)<1){
         if(data.dataType() == opendlv::logic::perception::GroundSurfaceArea::ID()){
             opendlv::logic::perception::GroundSurfaceArea surfaceArea = cluon::extractMessage<opendlv::logic::perception::GroundSurfaceArea>(std::move(data));
