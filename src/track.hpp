@@ -86,17 +86,7 @@ class Track {
 
   /* Member variables */
   float m_groundSpeed;
-  bool m_newFrame;
-  int m_objectId;
   std::mutex m_groundSpeedMutex;
-  std::mutex m_surfaceMutex;
-  std::map< double, std::vector<float> > m_surfaceFrame;
-  std::map< double, std::vector<float> > m_surfaceFrameBuffer;
-  uint64_t m_nSurfacesInframe;
-  int m_surfaceId;
-  std::chrono::time_point<std::chrono::system_clock> m_timeReceived;
-  int m_lastObjectId;
-  bool m_newId;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;

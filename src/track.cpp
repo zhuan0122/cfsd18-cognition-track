@@ -19,7 +19,6 @@
 
 #include <iostream>
 #include <cmath>
-#include <thread>
 #include "track.hpp"
 #include <chrono>
 //#include "interpolation.h"
@@ -27,17 +26,7 @@
 Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4),
   m_groundSpeed{0.0f},
-  m_newFrame{true},
-  m_objectId{1},
   m_groundSpeedMutex{},
-  m_surfaceMutex{},
-  m_surfaceFrame{},
-  m_surfaceFrameBuffer{},
-  m_nSurfacesInframe{},
-  m_surfaceId{},
-  m_timeReceived{},
-  m_lastObjectId{},
-  m_newId{true},
   m_tick{},
   m_tock{},
   m_newClock{true},
@@ -55,7 +44,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
 {
   m_senderStamp=(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (m_senderStamp);
   // path
-  m_receiveTimeLimit=(commandlineArguments["receiveTimeLimit"].size() != 0) ? (static_cast<double>(std::stod(commandlineArguments["receiveTimeLimit"]))) : (m_receiveTimeLimit); //TODO do we really need to static cast a stof to float?
+ //TODO do we really need to static cast a stof to float?
   m_distanceBetweenPoints=(commandlineArguments["distanceBetweenPoints"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["distanceBetweenPoints"]))) : (m_distanceBetweenPoints);
   m_traceBack=(commandlineArguments["useTraceBack"].size() != 0) ? (std::stoi(commandlineArguments["useTraceBack"])==1) : (false);
   // steering
@@ -97,9 +86,7 @@ void Track::tearDown()
 }
 
 void Track::receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea> currentFrame){
-  //Eigen::MatrixXd extractedCones(3,currentFrame.size());
   m_tick = std::chrono::system_clock::now();
-  std::map< double, std::vector<float> > surfaceFrame;
   std::reverse_iterator<std::map<int,opendlv::logic::perception::GroundSurfaceArea>::iterator> it;
   it = currentFrame.rbegin();
   int I = 0;
@@ -115,20 +102,13 @@ void Track::receiveCombinedMessage(std::map<int,opendlv::logic::perception::Grou
     float x4 = surfaceArea.x4();
     float y4 = surfaceArea.y4();
 
-    /*std::vector<float> v(4);
-    v[0] = (x1+x2)/2.0f;
-    v[1] = (y1+y2)/2.0f;
-    v[2] = (x3+x4)/2.0f;
-    v[3] = (y3+y4)/2.0f;*/
     localPath(2*I,0)=(x1+x2)/2.0f;;
     localPath(2*I,1)=(y1+y2)/2.0f;
     localPath(2*I+1,0)=(x3+x4)/2.0f;
     localPath(2*I+1,1)=(y3+y4)/2.0f;;
-    //surfaceFrame[static_cast<double>(it->first)] = v;
     it++;
     I++;
   }
-  //m_surfaceFrame = surfaceFrame;
 
   Track::run(localPath);
 } // End of recieveCombinedMessage
@@ -139,155 +119,18 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
     auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(a_container));
     m_groundSpeed = groundSpeed.groundSpeed();
-    //std::cout<<"Track received GroundSpeedReading: "<<groundSpeed.groundSpeed()<<std::endl;
-  }
-
-  if(a_container.dataType() == opendlv::logic::perception::GroundSurfaceProperty::ID()){
-    if (m_newClock) {
-      m_newClock = false;
-      m_tick = std::chrono::system_clock::now();
-    }
-  //    m_lastTimeStamp = a_container.getSampleTimeStamp();
-      auto surfaceProperty = cluon::extractMessage<opendlv::logic::perception::GroundSurfaceProperty>(std::move(a_container));
-      int surfaceId = surfaceProperty.surfaceId();
-      auto nSurfacesInframe = surfaceProperty.property();
-      //std::cout<<"Track recieved surface property: "<<" property: "<<nSurfacesInframe<<" frame ID: "<<surfaceId<<std::endl;
-
-      if (m_newFrame) { // If true, a frame has just been sent
-        m_newFrame = false;
-        m_nSurfacesInframe = std::stoul(nSurfacesInframe);
-        m_surfaceId = surfaceId; // Currently not used.
-        //std::cout << "SurfaceId: " << surfaceId<<std::endl;
-        //std::cout << "nSurfacesInframe: " << nSurfacesInframe<<std::endl;
-      }
-
-  }
-
-  if (a_container.dataType() == opendlv::logic::perception::GroundSurfaceArea::ID()) {
-    int objectId;
-    {
-    std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
-      auto groundSurfaceArea = cluon::extractMessage<opendlv::logic::perception::GroundSurfaceArea>(std::move(a_container));
-      objectId = groundSurfaceArea.surfaceId();
-      cluon::data::TimeStamp containerStamp = a_container.sampleTimeStamp();
-      double timeStamp = cluon::time::toMicroseconds(containerStamp); // Save timeStamp for sorting purposes;
-      if (m_newId) { // TODO: does it need to be global? can it be initialized in another way?
-        m_objectId = (objectId!=m_lastObjectId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
-        //std::cout << "newId, m_objectId: " <<m_objectId <<std::endl;
-        m_newId=(m_objectId !=-1)?(false):(true); // Set new id to false while collecting current frame id, or keep as true if current id is from an already run frame
-      }
-      //std::cout << "objectId: " <<objectId <<std::endl;
-      //std::cout << "m_objectId: " <<m_objectId <<std::endl;
-      //std::cout << "m_lastObjectId: " <<m_lastObjectId <<std::endl;
-      float x1 = groundSurfaceArea.x1(); //Unpack message
-      float y1 = groundSurfaceArea.y1();
-      float x2 = groundSurfaceArea.x2();
-      float y2 = groundSurfaceArea.y2();
-      float x3 = groundSurfaceArea.x3();
-      float y3 = groundSurfaceArea.y3();
-      float x4 = groundSurfaceArea.x4();
-      float y4 = groundSurfaceArea.y4();
-      //std::cout<<"Track recieved surface: "<<" x1: "<<x1<<" y1: "<<y1<<" x2: "<<x2<<" y2: "<<y2<<" x3: "<<x3<<" y3: "<<y3<<" x4: "<<x4<<" y4 "<<y4<<" frame ID: "<<objectId<<" timeStamp: "<<timeStamp<<std::endl;
-
-      std::vector<float> v(4);
-      v[0] = (x1+x2)/2.0f;
-      v[1] = (y1+y2)/2.0f;
-      v[2] = (x3+x4)/2.0f;
-      v[3] = (y3+y4)/2.0f;
-
-      if (objectId == m_objectId) {
-        //std::cout << "objectId in frame: " <<objectId <<std::endl;
-        m_surfaceFrame[timeStamp] = v;
-        m_timeReceived = std::chrono::system_clock::now(); //Store time for latest message recieved
-        /*std::cout << "Surfaces in frame: " <<m_surfaceFrame.size() <<std::endl;
-        for (std::map<double, std::vector<float> >::iterator it = m_surfaceFrame.begin();it !=m_surfaceFrame.end();it++){
-          v = it->second;
-          for (size_t i = 0; i < 4; i++) {
-            std::cout<<v[i]<<"\n";
-          }
-        }*/
-      } else if (objectId != m_lastObjectId){ // If message doesn't belong to current or previous frame.
-        //std::cout << "objectId in buffer: " <<objectId <<std::endl;
-        m_surfaceFrameBuffer[timeStamp] = v; // Place message content coordinates in buffer
-        //std::cout << "Surfaces in buffer: " <<m_surfaceFrameBuffer.size() <<std::endl;
-        /*for (std::map<double, std::vector<float> >::iterator it = m_surfaceFrame.begin();it !=m_surfaceFrame.end();it++){
-          v = it->second;
-          for (size_t i = 0; i < 4; i++) {
-            std::cout<<v[i]<<"\n";
-          }
-        }*/
-      }
-    }
-    auto wait = std::chrono::system_clock::now(); // Time point now
-    std::chrono::duration<double> dur = wait-m_timeReceived; // Duration since last message recieved to m_surfaceFrame
-    double duration = (m_objectId!=-1)?(dur.count()):(-1.0); // Duration value of type double in seconds OR -1 which prevents running the surface while ignoring messages from an already run frame
-
-    if (duration>m_receiveTimeLimit) { //Only for debug
-      std::cout<<"DURATION TIME TRACK EXCEEDED: "<<duration<<std::endl;
-      std::cout << "Surfaces to run: " <<m_surfaceFrame.size() <<std::endl;
-      /*std::vector<float> v(4);
-      for (std::map<double, std::vector<float> >::iterator it = m_surfaceFrame.begin();it !=m_surfaceFrame.end();it++){
-        v = it->second;
-        for (size_t i = 0; i < 4; i++) {
-          std::cout<<v[i]<<"\n";
-        }
-      }*/
-    }
-
-    // Run if frame is full or if we have waited to long for the remaining messages
-    if ((m_surfaceFrame.size()==m_nSurfacesInframe || duration>m_receiveTimeLimit)) { //!m_newFrame && objectId==m_surfaceId &&
-      //std::cout<<"Run condition OK "<<"\n";
-      //std::cout << "duration: " <<duration <<std::endl;
-      /*std::vector<float> v;
-      std::cout<<"Running surface: "<<std::endl;
-      for (std::map<double, std::vector<float> >::iterator it = m_surfaceFrame.begin();it !=m_surfaceFrame.end();it++){
-        v=it->second;
-        std::cout<<v[0]<<" "<<v[1]<<" "<<v[2]<<" "<<v[3]<<std::endl;
-      }*/
-      Eigen::MatrixXf localPath;
-      std::thread surfaceCollector(&Track::run, this, localPath); // Run the surface in a thread
-      surfaceCollector.detach();
-    }
   }
 }
 
 
 void Track::run(Eigen::MatrixXf localPath){
-  //std::cout<<"enter run"<<"\n";
-  std::map< double, std::vector<float> > surfaceFrame;
-  {
-  std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
-    m_newFrame = true; // Allow for new surface property
-    surfaceFrame = m_surfaceFrame; // Copy frame
-    m_surfaceFrame = m_surfaceFrameBuffer; // Add buffer to new frame
-    m_surfaceFrameBuffer.clear(); // Clear buffer
-    m_lastObjectId = m_objectId; // Update last object id to ignore late messages
-    m_newId = true; // Allow for new messages to be placed in m_surfaceFrame
-    //std::cout << "Cleared buffer " <<std::endl;
-  }
-
-  /*std::vector<float> v;
-  Eigen::MatrixXf localPath(surfaceFrame.size()*2,2);
-  //std::cout<<"localPath.rows(): "<<localPath.rows()<<"\n";
-  {
-    std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
-    int I=0;
-    for (std::map<double, std::vector<float> >::iterator it = surfaceFrame.begin();it !=surfaceFrame.end();it++){
-      v=it->second;
-      localPath(2*I,0)=v[0];
-      localPath(2*I,1)=v[1];
-      localPath(2*I+1,0)=v[2];
-      localPath(2*I+1,1)=v[3];
-      I++;
-    }
-  }*/
   // Remove negative path points
   bool preSet = false;
   bool STOP = false;
   float headingRequest;
   float distanceToAimPoint;
   float accelerationRequest;
-  //std::cout<<"localPath.rows(): "<<localPath.rows()<<std::endl;
+
   if (localPath.rows()>0){
     if (localPath(0,0)<0.0f) {
       int count = 0;
@@ -353,7 +196,6 @@ void Track::run(Eigen::MatrixXf localPath){
         }
       }
       if (previewDistance>pathLength) {
-        //std::cout<<"previewDistance "<< previewDistance <<" is longer than pathLength "<<pathLength<<std::endl;
         previewDistance = pathLength;
       }
       headingRequest = Track::driverModelSharp(localPath, previewDistance);
@@ -370,11 +212,12 @@ void Track::run(Eigen::MatrixXf localPath){
     distanceToAimPoint=1.0f;
     accelerationRequest=0.0f;
   }
-//std::cout << "Sending headingRequest: " << headingRequest << std::endl;
+
   {
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
     std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
     cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+  //std::cout << "Sending headingRequest: " << headingRequest << std::endl;
     opendlv::logic::action::AimPoint steer;
     steer.azimuthAngle(headingRequest);
     steer.distance(distanceToAimPoint);
@@ -510,8 +353,6 @@ float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
           k++;
         }
         else{
-          //std::cout<<"index: "<<idx<<std::endl;
-          //std::cout<<"localPath(idx): "<<localPath(idx)<<std::endl;
           error[k] = localPath(idx,1);
           k++;
         }
@@ -525,15 +366,11 @@ float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
     }
 
     float ey = std::atan2(localPath(1,1)-localPath(0,1),localPath(1,0)-localPath(0,0));
-      //std::cout<<"K1e1 "<<K1*error[0]<<std::endl;
-      //std::cout<<"Kyey "<<Ky*ey<<std::endl;
+
     float errorSum = 0.0f;
     float j=0.0f;
     for (int i = 1; i < n; i++) {
       errorSum += error[i]*1.0f/expf(j)*m_C;
-      //std::cout<<"e "<< i <<": "<<error[i]<<std::endl;
-      //std::cout<<"K "<<i<<": "<<1.0f/expf(j)*C<<std::endl;
-      //std::cout<<"K[i]e[i] i= "<<i<<": "<<error[i]*1.0f/expf(j)*C<<std::endl;
       j+=m_c;
     }
 
@@ -607,7 +444,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         aimPoint = (localPath.row(k+1)-localPath.row(k))*(distanceP1AimPoint/distanceP1P2) + localPath.row(k);
       }
       else {// Place aimpoint on first path element
-         //interpolation
+         //interpolation looks nicer in simulation but gives same angle
         /*distanceP1P2 = localPath.row(0).norm(); // Distance is equal to the distance to the first point;
         overshoot = sumPoints - previewDistance;
         distanceP1AimPoint = distanceP1P2 - overshoot;
@@ -639,7 +476,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   plot.minValue(localPath(localPath.rows()-2,1));
   m_od4.send(plot, sampleTime, 55);*/
   float distanceToAimPoint=aimPoint.norm();
-  if (distanceToAimPoint>5.0f) { //TODO debug only
+  if (distanceToAimPoint>10.0f) { //TODO debug only
     std::cout<<"distanceToAimPoint: "<<distanceToAimPoint<<std::endl;
     std::cout<<"aimPoint: "<<aimPoint<<std::endl;
     std::cout<<"localPath: "<<localPath<<std::endl;
@@ -687,8 +524,6 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       previewAngle = std::max(previewAngle,-m_wheelAngleLimit*3.14159265f/180.0f);
     }*/
     float headingError = std::abs(headingRequest)/(m_wheelAngleLimit*3.14159265f/180.0f);
-    //std::cout<<"headingError: "<<headingError<<std::endl;
-    //std::cout<<"headinError scaling: "<<1.0f-headingError*headingErrorDependency<<std::endl;
 
     // Set velocity candidate based on expected lateral acceleration
     speedProfile.resize(curveRadii.size());
@@ -870,7 +705,6 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
   else{
     accelerationRequest = 0.0f;
   }
-  //std::cout << "groundSpeedCopy: " << groundSpeedCopy << std::endl;
   return accelerationRequest;
 }
 
@@ -919,7 +753,6 @@ std::vector<float> Track::curvatureTriCircle(Eigen::MatrixXf localPath, int step
 }
 
 std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
-  //auto startPoly = std::chrono::system_clock::now();
   int n = m_polyDeg;
   int pointsPerSegment = m_pointsPerSegment;
   int i,j,segments,N;
@@ -932,7 +765,7 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
   Eigen::VectorXf dividedPathY(localPath.rows());
   std::vector<Eigen::VectorXf> dividedPathsX;
   std::vector<Eigen::VectorXf> dividedPathsY;
-      //curveRadii.insert(curveRadii.end(), R.begin(), R.end() );
+
   while (l < localPath.rows()-2){ //TODO improve this section
     while ((localPath(l,0) >= localPath(l+1,0)) && l < localPath.rows()-2){ // While X decreasing
       dividedPathX(k) = localPath(l,0);
@@ -1125,9 +958,6 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
       }
     } // end p-loop
   } // end P-loop
-  /*auto stopPoly = std::chrono::system_clock::now();
-  auto timePoly = std::chrono::duration_cast<std::chrono::microseconds>(stopPoly - startPoly);
-  std::cout << "Polyfit Time:" << timePoly.count() << std::endl;*/
   std::cout<<"curveRadii: "<<" ";
   for (size_t m = 0; m < curveRadii.size(); m++) {
     std::cout<<curveRadii[m]<<" ";
