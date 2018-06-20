@@ -89,10 +89,16 @@ class Track {
   std::mutex m_groundSpeedMutex;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
+  std::chrono::time_point<std::chrono::system_clock> m_tickDt;
+  std::chrono::time_point<std::chrono::system_clock> m_tockDt;
   bool m_newClock;
   bool m_brakingState;
   bool m_accelerationState;
   bool m_rollingState;
+  bool m_constantVelocityState;
+  float m_critVelocity;
+  float m_timeToCritVel;
+  float m_dt;
   std::mutex m_sendMutex;
 };
 
