@@ -38,13 +38,13 @@ int32_t main(int32_t argc, char **argv) {
   } else {
     uint32_t const surfaceId=(commandlineArguments["surfaceId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["surfaceId"])) : (0);
     uint32_t const speedId=(commandlineArguments["speedId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId"])) : (0);
-
+    uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(221);
     // Interface to a running OpenDaVINCI session
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     Track track(commandlineArguments, od4);
     int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(10);
-    int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(10); 
+    int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(10);
 
     Collector collector(track,gatheringTimeMs, separationTimeMs, 1);
 
@@ -69,8 +69,12 @@ int32_t main(int32_t argc, char **argv) {
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
     while (od4.isRunning()) {
-      std::this_thread::sleep_for(1s);
-      std::chrono::system_clock::time_point tp;
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+      cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+      opendlv::system::SignalStatusMessage readySignal;
+      readySignal.code(1);
+      od4.send(readySignal, sampleTime, id);
     }
   }
   return retCode;
