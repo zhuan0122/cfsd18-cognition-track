@@ -68,6 +68,7 @@ class Track {
   float m_c{1.0f};
   // velocity control
   float m_axSpeedProfile{-1.0f};
+  bool m_useAyReading{true};
   float m_velocityLimit{5.0f};
   float m_mu{0.9f};
   float m_axLimitPositive{5.0f};
@@ -87,6 +88,8 @@ class Track {
   /* Member variables */
   float m_groundSpeed;
   std::mutex m_groundSpeedMutex;
+  float m_lateralAcceleration;
+  std::mutex m_lateralAccelerationMutex;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   bool m_newClock;

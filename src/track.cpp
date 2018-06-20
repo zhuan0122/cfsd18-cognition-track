@@ -27,6 +27,8 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_od4(od4),
   m_groundSpeed{0.0f},
   m_groundSpeedMutex{},
+  m_lateralAcceleration{0.0f},
+  m_lateralAccelerationMutex{},
   m_tick{},
   m_tock{},
   m_newClock{true},
@@ -59,6 +61,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_c=(commandlineArguments["sharpSmallC"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sharpSmallC"]))) : (m_c);
   // velocity control
   m_axSpeedProfile=(commandlineArguments["axSpeedProfile"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["axSpeedProfile"]))) : (m_axSpeedProfile);
+  m_useAyReading=(commandlineArguments["useAyReading"].size() != 0) ? (std::stoi(commandlineArguments["useAyReading"])==1) : (true);
   m_velocityLimit=(commandlineArguments["velocityLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["velocityLimit"]))) : (m_velocityLimit);
   m_mu=(commandlineArguments["mu"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["mu"]))) : (m_mu);
   m_axLimitPositive=(commandlineArguments["axLimitPositive"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["axLimitPositive"]))) : (m_axLimitPositive);
@@ -119,6 +122,11 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
     auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(a_container));
     m_groundSpeed = groundSpeed.groundSpeed();
+  }
+  if (a_container.dataType() == opendlv::proxy::AccelerationReading::ID()) {
+    std::unique_lock<std::mutex> lockLateralAcceleration(m_lateralAccelerationMutex);
+    auto lateralAcceleration = cluon::extractMessage<opendlv::proxy::AccelerationReading>(std::move(a_container));
+    m_lateralAcceleration = lateralAcceleration.accelerationY();
   }
 }
 
@@ -574,7 +582,16 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         }
       }
     }
-    float ay = powf(groundSpeedCopy,2)/(m_wheelBase/std::tan(std::abs(headingRequest)));
+    float ay;// = powf(groundSpeedCopy,2)/(m_wheelBase/std::tan(std::abs(headingRequest)));
+    {
+    std::unique_lock<std::mutex> lockLateralAcceleration(m_lateralAccelerationMutex);
+      ay = m_lateralAcceleration;
+    }
+    std::cout<<"ay: "<<ay<<" old ay: "<<powf(groundSpeedCopy,2)/(m_wheelBase/std::tan(std::abs(headingRequest)))<<std::endl;
+    if (!m_useAyReading) {
+      ay = powf(groundSpeedCopy,2)/(m_wheelBase/std::tan(std::abs(headingRequest)));
+    }
+
     if(brakeTime<=0.0f){ //braking is critical
       /*if (brakeTime<0.0f) {
         std::cout<<"braking too late, brakeTime: "<<brakeTime<<std::endl;
@@ -625,9 +642,9 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       //std::cout<<"accelerate max: "<<accelerationRequest<<std::endl;
       if (sqrtf(powf(ay,2)+powf(accelerationRequest,2)) >= g*mu) {
         accelerationRequest = sqrtf(powf(g*mu,2)-powf(ay,2))*0.9f;
-        //std::cout<<"accreq limited: "<<accelerationRequest<<std::endl;
+        std::cout<<"accreq limited: "<<accelerationRequest<<std::endl;
         if (std::isnan(accelerationRequest)) {
-          //std::cout<<"accelerationRequest 3 is NaN, ay = "<<ay<<std::endl;
+          std::cout<<"accelerationRequest 3 is NaN, ay = "<<ay<<std::endl;
           accelerationRequest = 0.0f;
         }
       }

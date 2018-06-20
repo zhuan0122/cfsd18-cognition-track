@@ -65,6 +65,7 @@ int32_t main(int32_t argc, char **argv) {
 
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
     od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
+    od4.dataTrigger(opendlv::proxy::AccelerationReading::ID(),speedEnvelope);
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;
