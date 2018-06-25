@@ -132,13 +132,16 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
 
 
 void Track::run(Eigen::MatrixXf localPath){
-  // Remove negative path points
+
   bool preSet = false;
   bool STOP = false;
   float headingRequest;
   float distanceToAimPoint;
   float accelerationRequest;
 
+  // Order path
+  localPath = orderCones(localPath);
+  // Remove negative path points
   if (localPath.rows()>0){
     if (localPath(0,0)<0.0f) {
       int count = 0;
@@ -341,6 +344,52 @@ Eigen::MatrixXf Track::placeEquidistantPoints(Eigen::MatrixXf oldPathPoints, boo
 
   return newPathPoints;
 } // End of placeEquidistantPoints
+
+Eigen::MatrixXf Track::orderCones(Eigen::MatrixXf localPath)
+{
+  // (A function from DetectConeLane)
+
+  // Input: Cone and vehicle positions in the same coordinate system
+  // Output: The localPath in order
+  int nCones = localPath.rows();
+  Eigen::MatrixXf current(1,2);
+  current << -3,0;
+  Eigen::ArrayXXi found(nCones,1);
+  found.fill(-1);
+  Eigen::MatrixXf orderedCones(nCones,2);
+  float shortestDist;
+  float tmpDist;
+  int closestConeIndex = 0;
+
+  // The first chosen cone is the one closest to the vehicle. After that it continues with the closest neighbour
+  for(int i = 0; i < nCones; i = i+1)
+  {
+
+    shortestDist = std::numeric_limits<float>::infinity();
+    // Find closest cone to the last chosen cone
+    for(int j = 0; j < nCones; j = j+1)
+    {
+      if(!((found==j).any()))
+      {
+        tmpDist = (current-localPath.row(j)).norm();
+        if(tmpDist < shortestDist)
+        {
+          shortestDist = tmpDist;
+          closestConeIndex = j;
+        } // End of if
+      } // End of if
+    } // End of for
+
+    found(i) = closestConeIndex;
+    current = localPath.row(closestConeIndex);
+  } // End of for
+  // Rearrange localPath to have the order of found
+  for(int i = 0; i < nCones; i = i+1)
+  {
+    orderedCones.row(i) = localPath.row(found(i));
+  } // End of for
+  return orderedCones;
+} // End of orderCones
 
 float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
   float headingRequest;

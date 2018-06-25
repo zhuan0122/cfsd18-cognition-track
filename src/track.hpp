@@ -43,6 +43,7 @@ class Track {
   void run(Eigen::MatrixXf localPath);//std::map< double, std::vector<float> >
   Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
   Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
+  Eigen::MatrixXf orderCones(Eigen::MatrixXf localPath);
   std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
   float driverModelSharp(Eigen::MatrixXf, float);
   float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, bool);
