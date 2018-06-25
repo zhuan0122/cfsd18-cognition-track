@@ -73,6 +73,8 @@ class Track {
   float m_axLimitPositive{5.0f};
   float m_axLimitNegative{-5.0f};
   float m_headingErrorDependency{0.7f};
+  float m_curveDetectionAngle{1.0f};
+  int m_curveDetectionPoints{20};
   // curvature estimation
   bool m_polyFit{false};
   int m_step{5};
