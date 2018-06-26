@@ -38,7 +38,9 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_constantVelocityState{false},
   m_critVelocity{0.0f},
   m_timeToCritVel{},
-  m_dt{},
+  m_accVal{},
+  m_minRadius{},
+  m_apexRadius{},
   m_sendMutex()
 {
  setUp(commandlineArguments);
@@ -64,6 +66,8 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_C=(commandlineArguments["sharpBigC"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sharpBigC"]))) : (m_C);
   m_c=(commandlineArguments["sharpSmallC"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sharpSmallC"]))) : (m_c);
   // velocity control
+  m_accVal=(commandlineArguments["startAccVal"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["startAccVal"]))) : (m_accVal);
+  m_accFreq=(commandlineArguments["accFreq"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["accFreq"]))) : (m_accFreq);
   m_axSpeedProfile=(commandlineArguments["axSpeedProfile"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["axSpeedProfile"]))) : (m_axSpeedProfile);
   m_velocityLimit=(commandlineArguments["velocityLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["velocityLimit"]))) : (m_velocityLimit);
   m_mu=(commandlineArguments["mu"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["mu"]))) : (m_mu);
@@ -468,18 +472,18 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         distanceP1AimPoint = distanceP1P2 - overshoot;
         aimPoint = localPath.row(0)*(distanceP1AimPoint/distanceP1P2);*/
         aimPoint = localPath.row(0);
-        std::cout << "aimpoint placed on first path element" << '\n';
+        /*std::cout << "aimpoint placed on first path element" << '\n';
         std::cout << "localPath.rows(): " <<localPath.rows()<< '\n';
         std::cout << "localPath.row(0): " <<localPath.row(0)<< '\n';
-        std::cout << "previewDistance: " <<previewDistance<< '\n';
+        std::cout << "previewDistance: " <<previewDistance<< '\n';*/
       }
     }
     // If the path is too short, place aimpoint at the last path element
     else {
       aimPoint = localPath.row(localPath.rows()-1);
-      std::cout << "aimpoint placed on last path element" << '\n';
+      /*std::cout << "aimpoint placed on last path element" << '\n';
       std::cout << "localPath.rows(): " <<localPath.rows()<< '\n';
-      std::cout << "previewDistance: " <<previewDistance<< '\n';
+      std::cout << "previewDistance: " <<previewDistance<< '\n';*/
     }
   }
   // Angle to aimpoint
@@ -560,8 +564,6 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       std::cout<<curveRadii[i]<<std::endl;
     }*/
 
-    //float brakeMetersBefore = 4;
-    //int K = round(brakeMetersBefore/m_distanceBetweenPoints);
     Eigen::MatrixXf P;
     int aIdx=-1;
     int curveDetectionPoints = (static_cast<int>(curveRadii.size())<m_curveDetectionPoints) ? (curveRadii.size()-1):(m_curveDetectionPoints);
@@ -572,21 +574,27 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       //std::cout<<"angle: "<<angle<<std::endl;
       if (std::abs(angle)>m_curveDetectionAngle) {
         aIdx=k-step;
-        std::cout<<"A curve starts at minIdx: "<<aIdx<<" curveRadius: "<<curveRadii[aIdx]<<std::endl;
+        //std::cout<<"A curve starts at minIdx: "<<aIdx<<" curveRadius: "<<curveRadii[aIdx]<<std::endl;
         break;
       }
     }
 
-    if (aIdx>0) {
-      float minRadii=100000.0f;
+
+    if (aIdx>=0) {
+      m_minRadius=100000.0f;
       int rIdx=0;
       for (uint32_t k = 0; k < curveRadii.size(); k++) {
-        if (curveRadii[k]<minRadii) {
-          minRadii=curveRadii[k];
+        if (curveRadii[k]<m_minRadius) {
+          m_minRadius=curveRadii[k];
           rIdx=k;
         }
       }
-      std::cout<<"Min radius in curve: "<<curveRadii[rIdx]<<std::endl;
+
+      if (aIdx==0 && (m_apexRadius-m_minRadius)>0) {
+        m_apexRadius = m_minRadius;
+        std::cout<<"m_apexRadius updated: "<<m_apexRadius<<std::endl;
+      }
+      //std::cout<<"Min radius in curve: "<<curveRadii[rIdx]<<std::endl;
 
       std::chrono::system_clock::time_point tp = std::chrono::system_clock::now(); //draw curve start point and end of angle point
       cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
@@ -597,102 +605,134 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       plot.minValue(localPath(aIdx+curveDetectionPoints,1));
       m_od4.send(plot, sampleTime, 55);
 
-      std::cout<<"speedProfile("<<aIdx<<") = "<<speedProfile(aIdx)<<" changed to speedProfile("<<rIdx<<") = "<<speedProfile(rIdx)<<std::endl;
+      //std::cout<<"speedProfile("<<aIdx<<") = "<<speedProfile(aIdx)<<" changed to speedProfile("<<rIdx<<") = "<<speedProfile(rIdx)<<std::endl;
       speedProfile(aIdx)=speedProfile(rIdx);
 
     }
 
+    int aimVelocityIdx = 20;
+    if (aimVelocityIdx>speedProfile.size()-1) {
+      aimVelocityIdx = speedProfile.size()-1;
+    }
 
     float tb;
     float tv;
-    //float ta;
-    float s=0;
+    float s=0.0f;
     float diff;
     float critDiff=100000.0f;
-    float critTb = 0.0f;
-    //float critTv;
-    //float critS = 0.0f;
-    //float rollResistance = -0.2f;
+    float critTb = -0.1f;
     int i;
     int idx = 0;
-    //int accIdx = 0;
-    //std::vector<float> distanceToCriticalPoint;
+
+    //float t = 1.0f/m_accFreq;
+    float tb2 = 0.0f;
+    float tv2 = 0.0f;
+    float diff2;
+    float critDiff2=100000.0f;
+    //float groundSpeedIfAcc = groundSpeedCopy+t*axLimitPositive;
+
     for (int k=0; k<step; k++){
       s+=(localPath.row(k+1)-localPath.row(k)).norm();
     }
+    float S = s + (localPath.row(step+1)-localPath.row(step)).norm();
     for (i=0; i<speedProfile.size(); i++){
       s+=(localPath.row(i+step+1)-localPath.row(i+step)).norm();
-      //distanceToCriticalPoint.push_back(s);
       tb = (speedProfile(i)-groundSpeedCopy)/(axLimitNegative);//time to reach velocity if braking max
       tv = s/groundSpeedCopy;
       diff = tv-tb; // when we need to brake, if =0 we need to brake now, if <0 we are braking too late
-      if(diff<critDiff){
+      if(diff<critDiff && tb > 0){ // save critical brake point
         critDiff=diff;
         critTb = tb;
-        //critTv = tv;
-        //critS = s;
         idx=i;
       }
-
+      //tb2 = (speedProfile(i)-groundSpeedIfAcc)/(axLimitNegative);
+      //tv2 = (s-groundSpeedIfAcc*t)/groundSpeedIfAcc;
+      if (i>0) {
+        tb2=(speedProfile(i)-speedProfile(0))/(axLimitNegative);
+        tv2=((s-S)/speedProfile(0));
+      }
+      diff2 = tv2-tb2;
+      if(diff2<critDiff2 && tb2 > 0){
+        critDiff2=diff2;
+      }
     }
 
     m_tockDt = std::chrono::system_clock::now();
-    std::chrono::duration<double> dur = m_tockDt-m_tickDt;
+    std::chrono::duration<double> DT = m_tockDt-m_tickDt;
 
     float ay = powf(groundSpeedCopy,2)/(m_wheelBase/std::tan(std::abs(headingRequest))); //TODO: read from IMU accelerationReading
     /*---------------State selection---------------*/
-    if(critDiff<=0.1f && speedProfile(idx)<=velocityLimit){ //braking is critical
-      if (m_brakingState) {std::cout<<"NEW CRIT DIFF: "<<critDiff<<" Vdes: "<<speedProfile(idx)<<" R: "<<curveRadii[idx]<<std::endl;}
-      else {std::cout<<"ENTER BRAKING STATE: "<<critDiff<<" Vdes: "<<speedProfile(idx)<<" R: "<<curveRadii[idx]<<std::endl;}
+    /*BRAKING STATE*/
+    if(critDiff<=0.1f){ //braking is critical
+      //if (m_brakingState) {std::cout<<"NEW CRIT DIFF: "<<critDiff<<" Vdes: "<<speedProfile(idx)<<" R: "<<curveRadii[idx]<<std::endl;}
+      //else {std::cout<<"ENTER BRAKING STATE: "<<critDiff<<" Vdes: "<<speedProfile(idx)<<" R: "<<curveRadii[idx]<<std::endl;}
 
       m_critVelocity = speedProfile(idx);
       m_timeToCritVel = critTb;
       m_brakingState = true;
       m_rollingState = false;
       m_accelerationState = false;
-      /*if (sqrtf(powf(ay,2)+powf(accelerationRequest,2)) >= g*mu) {
-        accelerationRequest = -sqrtf(powf(g*mu,2)-powf(ay,2))*0.9f;
-        std::cout<<"accreq limited: "<<accelerationRequest<<std::endl;
-      }
-      if (std::isnan(accelerationRequest)) {
-        std::cout<<"accelerationRequest 1 is NaN, ay = "<<ay<<std::endl;
-        accelerationRequest = 0.0f;
-      }*/
+      m_apexRadius=100000.0f;
     }
-    if (!m_brakingState && (speedProfile(idx)-groundSpeedCopy)>=2.0f) {
-      if (!m_accelerationState) {
-        std::cout<<"ENTER ACCELERATION STATE"<<std::endl;
+    /*ACCELERATION STATE*/
+    if (!m_brakingState && critDiff2>0.1f){
+      if (critDiff2<9999) {
+        std::cout<<"critDiff2: "<<critDiff2<<std::endl;
       }
       m_brakingState = false;
       m_rollingState = false;
       m_accelerationState = true;
-    }
 
-    if (((!m_brakingState && !m_accelerationState) || aIdx==0 || localPath(0,1)>0.5) && groundSpeedCopy<=m_critVelocity) {//m_wheelBase/std::tan(std::abs(headingRequest)) < 9.0f) {
-      if (!m_rollingState) {
-        std::cout<<"ENTER ROLLING STATE"<<std::endl;
-        /*if (m_wheelBase/std::tan(std::abs(headingRequest)) < 9.0f) {
-          std::cout<<"headingError: "<<headingError<<std::endl;
-          std::cout<<" Curve radius: "<<curveRadii[0]<<std::endl;
-          std::cout<<" Turn radius: "<<m_wheelBase/std::tan(std::abs(headingRequest))<<std::endl;
-        }*/
-      }
       if (aIdx==0) {
-        std::cout<<"rolling in curve"<<std::endl;
+        //std::cout<<"m_apexRadius: "<<m_apexRadius<<std::endl;
+        //std::cout<<"m_minRadius: "<<m_minRadius<<std::endl;
+        if ((m_minRadius-m_apexRadius)>1.0f) {
+          std::cout<<" Apex passed -> diff: "<<m_minRadius-m_apexRadius<< std::endl;
+          m_apexRadius=0.0f;
+        }
+        else{
+          std::cout<<" Before apex -> diff: "<<m_minRadius-m_apexRadius<<std::endl;
+          m_rollingState = true;
+          m_accelerationState = false;
+        }
       }
-      if (localPath(0,1)>0.5) {
-        std::cout<<"unstable!!! offset: "<<localPath(0,1)<<std::endl;
-      }
+    }
+    /*ROLLING STATE*/
+    if (!m_brakingState && !m_accelerationState) {
       m_brakingState = false;
       m_rollingState = true;
       m_accelerationState = false;
     }
+    /*if (!m_brakingState && (!m_accelerationState || aIdx==0 || headingError > 0.7f) &&  groundSpeedCopy>1.0f) {//m_wheelBase/std::tan(std::abs(headingRequest)) < 9.0f) {
+      if (!m_rollingState) {
+        std::cout<<"ENTER ROLLING STATE"<<std::endl;
+        if (m_wheelBase/std::tan(std::abs(headingRequest)) < 9.0f) {
+          std::cout<<"headingError: "<<headingError<<std::endl;
+          std::cout<<" Curve radius: "<<curveRadii[0]<<std::endl;
+          std::cout<<" Turn radius: "<<m_wheelBase/std::tan(std::abs(headingRequest))<<std::endl;
+        }
+      }
+      if (aIdx==0) {
+        std::cout<<"rolling in curve"<<std::endl;
+      }
+      m_brakingState = false;
+      m_rollingState = true;
+      m_accelerationState = false;
+    }*/
   /*---------------State execution---------------*/
     if (m_brakingState) {
-      m_timeToCritVel -= static_cast<float>(dur.count());
+      m_timeToCritVel -= static_cast<float>(DT.count());
       if (groundSpeedCopy>m_critVelocity) {
         float accTmp = ((m_critVelocity-groundSpeedCopy)/(m_timeToCritVel)<=0.0f) ? (m_critVelocity-groundSpeedCopy)/(m_timeToCritVel):(axLimitNegative);
         accelerationRequest = std::max(accTmp,axLimitNegative);
+        /*if (sqrtf(powf(ay,2)+powf(accelerationRequest,2)) >= g*mu) {
+          accelerationRequest = -sqrtf(powf(g*mu,2)-powf(ay,2))*0.9f;
+          std::cout<<"decreq limited: "<<accelerationRequest<<std::endl;
+        }
+        if (std::isnan(accelerationRequest)) {
+          //std::cout<<"accelerationRequest 1 is NaN, ay = "<<ay<<std::endl;
+          accelerationRequest = 0.0f;
+        }*/
         std::cout<<"braking: "<<accelerationRequest<<" m_timeToCritVel: "<<m_timeToCritVel<<" v1-v0: "<<m_critVelocity-groundSpeedCopy<<std::endl;
       }
       else{
@@ -701,27 +741,36 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     }
 
     if (m_rollingState) {
-      accelerationRequest = 0.0f;
-      std::cout<<"rolling: "<<accelerationRequest<<std::endl;
+      if (groundSpeedCopy>1.0f) {
+        accelerationRequest = 0.0f;
+        std::cout<<"rolling: "<<accelerationRequest<<std::endl;
+      }else{
+        accelerationRequest = 1.0f;
+        std::cout<<"rolling aborted: "<<accelerationRequest<<std::endl;
+      }
     }
 
     if (m_accelerationState) {
-      //if (groundSpeedCopy<speedProfile(idx)) {
-        //accelerationRequest = std::max((speedProfile(idx)-groundSpeedCopy)/(2*critS),axLimitPositive);
-        accelerationRequest = axLimitPositive;
-        if (sqrtf(powf(ay,2)+powf(accelerationRequest,2)) >= g*mu) {
+      m_accClock+=static_cast<float>(DT.count());
+      if (!m_accelerationState || (m_accClock>(1.0f/m_accFreq))) {
+        m_accClock = 0.0f;
+        //m_accVal = std::max((speedProfile(aimVelocityIdx)-groundSpeedCopy)/(2.0f*static_cast<float>(aimVelocityIdx+step)*m_distanceBetweenPoints),axLimitPositive);
+        m_accVal = std::min((powf(speedProfile(0),2)-powf(groundSpeedCopy,2))/(2.0f*S),axLimitPositive);
+        //std::cout<<"ax: "<<(powf(speedProfile(0),2)-powf(groundSpeedCopy,2))/(2.0f*S)<<" vdes: "<<speedProfile(0)<<" v: "<<groundSpeedCopy<<std::endl;
+      }
+
+      accelerationRequest = m_accVal;
+
+      if (sqrtf(powf(ay,2)+powf(accelerationRequest,2)) >= g*mu) {
           accelerationRequest = sqrtf(powf(g*mu,2)-powf(ay,2))*0.9f;
-          //std::cout<<"accreq limited: "<<accelerationRequest<<std::endl;
+          std::cout<<"accreq limited: "<<accelerationRequest<<std::endl;
           if (std::isnan(accelerationRequest)) {
             accelerationRequest = 0.0f;
             //std::cout<<"accelerationRequest 3 is NaN, ay = "<<ay<<std::endl;
           }
+          //m_accVal = std::max(accelerationRequest-2.0f,0.0f);
         }
       //}
-      /*else{
-        accelerationRequest = 0.0f;
-        m_accelerationState = false;
-      }*/
 
       std::cout<<"accelerating: "<<accelerationRequest<<std::endl;
     }

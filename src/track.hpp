@@ -67,6 +67,7 @@ class Track {
   float m_C{m_K1};
   float m_c{1.0f};
   // velocity control
+  float m_accFreq{10};
   float m_axSpeedProfile{-1.0f};
   float m_velocityLimit{5.0f};
   float m_mu{0.9f};
@@ -100,7 +101,10 @@ class Track {
   bool m_constantVelocityState;
   float m_critVelocity;
   float m_timeToCritVel;
-  float m_dt;
+  float m_accVal{1.0f};
+  float m_accClock{0.0f};
+  float m_minRadius{1000000.0f};
+  float m_apexRadius{1000000.0f};
   std::mutex m_sendMutex;
 };
 
