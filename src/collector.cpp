@@ -74,7 +74,7 @@ void Collector::CollectSurfaces(cluon::data::Envelope data){
         surfaceCollector.detach();
     }
     else{
-        std::cout << "Leaking frames wtf!!!" << std::endl;
+        //std::cout << "Leaking frames wtf!!!" << std::endl;
     }
 
 }
@@ -92,11 +92,11 @@ auto start = std::chrono::system_clock::now();
         sleep = false;
     }
     if(elapsed.count() > m_timeOutMs*1000){
-        std::cout << "Timed out" << std::endl;
+        //std::cout << "Timed out" << std::endl;
         sleep = false;
     }
     if (dur.count()>m_separationTimeMs*0.001) {
-      std::cout << "Separation time exceeded: " <<" dur.count(): "<<dur.count()<<" m_separationTimeMs*0.001 "<<m_separationTimeMs*0.001<<std::endl;
+      //std::cout << "Separation time exceeded: " <<" dur.count(): "<<dur.count()<<" m_separationTimeMs*0.001 "<<m_separationTimeMs*0.001<<std::endl;
       sleep = false;
     }
   }
@@ -111,7 +111,7 @@ void Collector::GetCompleteFrame(){
     while(it2 != m_envelopeCount.end()){
         if(it2->second != static_cast<int>(m_packetSize)){
             currentFrameCopy.erase(it2->first);
-            std::cout << "Incomplete frame with id " << it2->first << " removed" << std::endl;
+            //std::cout << "Incomplete frame with id " << it2->first << " removed" << std::endl;
         }
         it2++;
     }
@@ -121,10 +121,10 @@ void Collector::GetCompleteFrame(){
 }
 
 void Collector::SendFrame(){
-    std::cout << "sending " << m_currentFrame.size() << " surfaces" << std::endl;
+    //std::cout << "sending " << m_currentFrame.size() << " surfaces" << std::endl;
     m_module.receiveCombinedMessage(m_currentFrame);
 
     m_tock = std::chrono::system_clock::now();
     std::chrono::duration<double> dur = m_tock-m_tick;
-    std::cout<<"Collector Module Time: "<<dur.count()<<std::endl;
+    //std::cout<<"Collector Module Time: "<<dur.count()<<std::endl;
 }
