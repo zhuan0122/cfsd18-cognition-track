@@ -21,7 +21,6 @@
 #include <cmath>
 #include "track.hpp"
 #include <chrono>
-//#include "interpolation.h"
 
 Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4),
