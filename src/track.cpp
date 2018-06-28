@@ -35,6 +35,7 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_brakingState{false},
   m_accelerationState{false},
   m_rollingState{true},
+  m_prevHeadingRequest{0.0f},
   m_sendMutex()
 {
  setUp(commandlineArguments);
@@ -132,53 +133,62 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
 
 
 void Track::run(Eigen::MatrixXf localPath){
-
-  bool preSet = false;
+  bool noPath = false;
+  bool specCase = false;
+  int count = 0;
   bool STOP = false;
   float headingRequest;
   float distanceToAimPoint;
   float accelerationRequest;
 
-  // Order path
-  localPath = orderCones(localPath);
-  // Remove negative path points
-  if (localPath.rows()>0){
-    if (localPath(0,0)<0.0f) {
-      int count = 0;
-      while (localPath(count,0)<0.0f){
+  if (localPath.rows()<0){
+    noPath = true;
+    //std::cout<<"NO PATH"<<std::endl;
+  }
+  else{
+    if(localPath.rows() == 2){
+      // Check for stop or "one point" signal
+      if (std::abs(localPath(1,0)) <= 0.0001f && std::abs(localPath(1,1)) <= 0.0001f) {
+        Eigen::MatrixXf localPathTmp = localPath.row(0);
+        localPath.resize(1,2);
+        localPath = localPathTmp;
+        STOP = true;
+        specCase = true;
+        //std::cout << "STOP signal recieved " << std::endl;
+      }
+      else if(std::abs(localPath(0,0)) <= 0.0001f && std::abs(localPath(0,1)) <= 0.0001f && localPath.rows()<3){
+        Eigen::MatrixXf localPathTmp = localPath.row(1);
+        localPath.resize(1,2);
+        localPath = localPathTmp;
+        specCase = true;
+        //std::cout << "ONE POINT signal recieved " << std::endl;
+      }
+    }
+    if (!specCase) {
+      // Order path
+      localPath = orderCones(localPath);
+      // Remove negative path points
+      if (localPath(0,0)<0.0f) {
+        while (localPath(count,0)<0.0f){
           count++;
           if (count>localPath.rows()-1) {
             STOP = true;
-            preSet = true;
+            noPath = true;
+            //std::cout<<"NO PATH, whole path removed"<<std::endl;
             localPath.resize(1,2);
             localPath <<  1, 0;
             break;
           }
-      }
-      if (!preSet) {
-        Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
-        localPath.resize(localPath.rows()-count,2);
-        localPath = localPathTmp;
-      }
-    }
-    if (!preSet) {
-      // Check for stop or "one point" signal
-      if(localPath.rows() > 1){
-        if (std::abs(localPath(1,0)) <= 0.0001f && std::abs(localPath(1,1)) <= 0.0001f) {
-          Eigen::MatrixXf localPathTmp = localPath.row(0);
-          localPath.resize(1,2);
-          localPath = localPathTmp;
-          STOP = true;
-          //std::cout << "STOP signal recieved " << std::endl;
         }
-        else if(std::abs(localPath(0,0)) <= 0.0001f && std::abs(localPath(0,1)) <= 0.0001f && localPath.rows()<3){
-          Eigen::MatrixXf localPathTmp = localPath.row(1);
-          localPath.resize(1,2);
+      }
+      if (!noPath) {
+        if (count>0) {
+          Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
+          localPath.resize(localPath.rows()-count,2);
           localPath = localPathTmp;
-          //std::cout << "ONE POINT signal recieved " << std::endl;
         }
-        else { //Place equidistant points
-
+        if (localPath.rows()>1) {
+          //Place equidistant points
           Eigen::MatrixXf localPathCopy;
           if (m_traceBack){
             Eigen::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
@@ -190,9 +200,10 @@ void Track::run(Eigen::MatrixXf localPath){
             localPathCopy = localPath;
           }
           localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
-        }
-      } //else Only one point remaining
+        } //else One point
+      }
     }
+
     float groundSpeedCopy;
     {
       std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
@@ -218,13 +229,15 @@ void Track::run(Eigen::MatrixXf localPath){
       distanceToAimPoint = std::get<1>(steering);
     }
     accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, m_velocityLimit, m_axLimitPositive, m_axLimitNegative, headingRequest, m_headingErrorDependency, m_mu, STOP);
-  }else{
-    headingRequest=0.0f;
+  }
+
+  if (noPath) {
+    headingRequest=m_prevHeadingRequest;
     distanceToAimPoint=1.0f;
     accelerationRequest=0.0f;
   }
 
-  {
+  { /*---SEND---*/
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
     std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
     cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
@@ -394,7 +407,7 @@ Eigen::MatrixXf Track::orderCones(Eigen::MatrixXf localPath)
 float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
   float headingRequest;
   int n = m_nSharp;
-  if (localPath.rows()>2) {
+  if (localPath.rows()>2) { //TODO: does not work for first lap??
     float sectionLength = previewDistance/n;
     std::vector<float> error(n);
     Eigen::MatrixXf::Index idx;
@@ -438,17 +451,19 @@ float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
       headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
     }
   }
-  else{
-    headingRequest = 0.0f;
+  else {
+    headingRequest = m_prevHeadingRequest;
   }
+  m_prevHeadingRequest = headingRequest;
   return headingRequest;
 }
 
 
 std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, float groundSpeedCopy, float previewTime) {
   float headingRequest;
+  float distanceToAimPoint;
   Eigen::Vector2f aimPoint(2);
-  bool preSet = false;
+  bool noPath = false;
   if (m_moveOrigin && localPath.rows()>2) {
     // Move localPath to front wheel axis
     Eigen::MatrixXf foo = Eigen::MatrixXf::Zero(localPath.rows(),2);
@@ -461,20 +476,20 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
       while (localPath(count,0)<0.0f){
           count++;
           if (count>localPath.rows()-1) {
-            aimPoint << 1,
-                        0;
-            preSet = true;
+            //aimPoint << 1, //TODO: remove?
+            //            0;
+            noPath = true;
             break;
           }
       }
-      if(!preSet){
+      if(!noPath){
         Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
         localPath.resize(localPath.rows()-count,2);
         localPath = localPathTmp;
       }
     }
   }
-  if (!preSet) {
+  if (!noPath) {
     // Calculate the distance between vehicle and aimpoint;
     float previewDistance = std::abs(groundSpeedCopy)*previewTime;
     ////std::cout << "previewDistance: "<<previewDistance<<"\n";
@@ -515,30 +530,36 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
       aimPoint = localPath.row(localPath.rows()-1);
       //std::cout << "aimpoint placed on last path element" << '\n';
     }
+    // Angle to aimpoint
+    headingRequest = atan2f(aimPoint(1),aimPoint(0));
+    // Limit heading request due to physical limitations
+    if (headingRequest>=0) {
+      headingRequest = std::min(headingRequest,m_wheelAngleLimit*3.14159265f/180.0f);
+    } else {
+      headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
+    }
+    /*std::chrono::system_clock::time_point tp = std::chrono::system_clock::now(); //draw end of path
+    cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+    opendlv::body::ActuatorInfo plot;
+    plot.x(localPath(localPath.rows()-1,0));
+    plot.y(localPath(localPath.rows()-1,1));
+    plot.z(localPath(localPath.rows()-2,0));
+    plot.minValue(localPath(localPath.rows()-2,1));
+    m_od4.send(plot, sampleTime, 55);*/
+
+    distanceToAimPoint=aimPoint.norm();
+    if (distanceToAimPoint>10.0f) { //TODO debug only
+      //std::cout<<"distanceToAimPoint: "<<distanceToAimPoint<<std::endl;
+      //std::cout<<"aimPoint: "<<aimPoint<<std::endl;
+      //std::cout<<"localPath: "<<localPath<<std::endl;
+    }
   }
-  // Angle to aimpoint
-  headingRequest = atan2f(aimPoint(1),aimPoint(0));
-  // Limit heading request due to physical limitations
-  if (headingRequest>=0) {
-    headingRequest = std::min(headingRequest,m_wheelAngleLimit*3.14159265f/180.0f);
-  } else {
-    headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
-  }
-  /*std::chrono::system_clock::time_point tp = std::chrono::system_clock::now(); //draw end of path
-  cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
-  opendlv::body::ActuatorInfo plot;
-  plot.x(localPath(localPath.rows()-1,0));
-  plot.y(localPath(localPath.rows()-1,1));
-  plot.z(localPath(localPath.rows()-2,0));
-  plot.minValue(localPath(localPath.rows()-2,1));
-  m_od4.send(plot, sampleTime, 55);*/
-  float distanceToAimPoint=aimPoint.norm();
-  if (distanceToAimPoint>10.0f) { //TODO debug only
-    //std::cout<<"distanceToAimPoint: "<<distanceToAimPoint<<std::endl;
-    //std::cout<<"aimPoint: "<<aimPoint<<std::endl;
-    //std::cout<<"localPath: "<<localPath<<std::endl;
+  else{
+    headingRequest=m_prevHeadingRequest;
+    distanceToAimPoint = 3.0f; //TODO: distanceToAimPoint is only used for plot, everywhere.
   }
 
+  m_prevHeadingRequest=headingRequest;
   return std::make_tuple(headingRequest,distanceToAimPoint);
 }
 
@@ -765,11 +786,11 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
   else if(STOP){
     if (std::abs(groundSpeedCopy) > 0.01f){
       accelerationRequest = axLimitNegative;
-      //std::cout << "BREAKING TO STOP " << std::endl;
+      std::cout << "BREAKING TO STOP " << std::endl;
     } else {accelerationRequest = 0.0f;}
   }
   else{
-    accelerationRequest = 0.0f;
+    accelerationRequest = 1.0f;
   }
   return accelerationRequest;
 }

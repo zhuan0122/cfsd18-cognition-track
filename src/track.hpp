@@ -97,6 +97,7 @@ class Track {
   bool m_brakingState;
   bool m_accelerationState;
   bool m_rollingState;
+  float m_prevHeadingRequest;
   std::mutex m_sendMutex;
 };
 
