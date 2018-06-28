@@ -77,6 +77,12 @@ class Track {
   float m_headingErrorDependency{0.7f};
   float m_curveDetectionAngle{1.0f};
   int m_curveDetectionPoints{20};
+  //....controller
+  float m_aimVel{5.0f};
+  float m_keepConstVel{-1.0f};
+  float m_kp{0.1f};
+  float m_kd{0.0f};
+  float m_ki{0.0f};
   // curvature estimation
   bool m_polyFit{false};
   int m_step{5};
@@ -106,6 +112,9 @@ class Track {
   float m_accClock{0.0f};
   float m_minRadius{1000000.0f};
   float m_apexRadius{1000000.0f};
+  bool m_specCase;
+  float m_ei;
+  float m_ePrev;
   std::mutex m_sendMutex;
 };
 
