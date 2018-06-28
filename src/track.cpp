@@ -77,6 +77,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_headingErrorDependency=(commandlineArguments["headingErrorDependency"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["headingErrorDependency"]))) : (m_headingErrorDependency);
   m_curveDetectionAngle=(commandlineArguments["curveDetectionAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["curveDetectionAngle"]))) : (m_curveDetectionAngle);
   m_curveDetectionPoints=(commandlineArguments["curveDetectionPoints"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["curveDetectionPoints"]))) : (m_curveDetectionPoints);
+  // ....controller
 
   // curvature estimation
   m_polyFit=(commandlineArguments["usePolyFit"].size() != 0) ? (std::stoi(commandlineArguments["usePolyFit"])==1) : (false);
@@ -729,6 +730,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         e = groundSpeedCopy-m_critVelocity;
         m_ei += e*DT.count();
         ed = (e-m_ePrev)/DT.count();
+        m_ePrev=e;
         accTmp = m_kp*e+m_kd*ed+m_ki*m_ei;
         accelerationRequest = std::max(accTmp,axLimitNegative);
 
@@ -762,7 +764,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       m_accClock+=static_cast<float>(DT.count());
       if (!m_accelerationState || (m_accClock>(1.0f/m_accFreq))) {
         m_accClock = 0.0f;
-        m_accVel = speedProfile(0);
+        m_aimVel = speedProfile(0);
         m_ei=0.0f;
         m_ePrev=0.0f;
         //m_accVal = std::min((powf(speedProfile(0),2)-powf(groundSpeedCopy,2))/(2.0f*S),axLimitPositive);
@@ -770,9 +772,10 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       }
       //accelerationRequest = m_accVal;
 
-      e = groundSpeedCopy-m_accVel;
+      e = groundSpeedCopy-m_aimVel;
       m_ei += e*DT.count();
       ed = (e-m_ePrev)/DT.count();
+      m_ePrev=e;
       accTmp = m_kp*e+m_kd*ed+m_ki*m_ei;
       accelerationRequest = std::max(accTmp,axLimitPositive);
 
@@ -856,7 +859,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     if (m_specCase=false) {
       m_ei=0.0f;
       m_ePrev=0.0f;
-      m_accVel=0.0f
+      m_aimVel=0.0f
     }
     m_specCase=true;
   }
@@ -867,12 +870,19 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     }
     m_specCase=true;
   }
-  if (m_specCase) {
-    e = groundSpeedCopy-m_accVel;
+
+  if (m_specCase || m_keepConstVel>0) {
+    if (m_keepConstVel>0) {
+      m_aimVel = m_keepConstVel;
+    }
+    e = groundSpeedCopy-m_aimVel;
     m_ei += e*DT.count();
     ed = (e-m_ePrev)/DT.count();
     accTmp = m_kp*e+m_kd*ed+m_ki*m_ei;
-    accelerationRequest = std::max(accTmp,axLimitPositive);
+    accelerationRequest = std::min(std::abs(accTmp),axLimitPositive);
+    if (accTmp<0) {
+      accelerationRequest=-accelerationRequest;
+    }
   }
   m_tickDt = std::chrono::system_clock::now();
   return accelerationRequest;
