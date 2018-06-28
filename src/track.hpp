@@ -67,6 +67,7 @@ class Track {
   float m_C{m_K1};
   float m_c{1.0f};
   // velocity control
+  float m_critDiff2{0.1f};
   float m_accFreq{10};
   float m_axSpeedProfile{-1.0f};
   float m_velocityLimit{5.0f};
