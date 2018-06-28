@@ -528,6 +528,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     std::cout<<"ayLimit set to: "<<ayLimit<<std::endl;
   }
   if ((!STOP) && (localPath.rows() > 2)){
+    m_specCase = false;
     // Caluclate curvature of path
       if (m_polyFit){
         step = 0;
@@ -668,7 +669,9 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       //else {std::cout<<"ENTER BRAKING STATE: "<<critDiff<<" Vdes: "<<speedProfile(idx)<<" R: "<<curveRadii[idx]<<std::endl;}
 
       m_critVelocity = speedProfile(idx);
-      m_timeToCritVel = critTb;
+      //m_timeToCritVel = critTb;
+      m_ei=0;
+      m_ePrev=0;
       m_brakingState = true;
       m_rollingState = false;
       m_accelerationState = false;
@@ -721,10 +724,16 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     }*/
   /*---------------State execution---------------*/
     if (m_brakingState) {
-      m_timeToCritVel -= static_cast<float>(DT.count());
+      //m_timeToCritVel -= static_cast<float>(DT.count());
       if (groundSpeedCopy>m_critVelocity) {
-        float accTmp = ((m_critVelocity-groundSpeedCopy)/(m_timeToCritVel)<=0.0f) ? (m_critVelocity-groundSpeedCopy)/(m_timeToCritVel):(axLimitNegative);
+        e = groundSpeedCopy-m_critVelocity;
+        m_ei += e*DT.count();
+        ed = (e-m_ePrev)/DT.count();
+        accTmp = m_kp*e+m_kd*ed+m_ki*m_ei;
         accelerationRequest = std::max(accTmp,axLimitNegative);
+
+        //float accTmp = ((m_critVelocity-groundSpeedCopy)/(m_timeToCritVel)<=0.0f) ? (m_critVelocity-groundSpeedCopy)/(m_timeToCritVel):(axLimitNegative);
+        //accelerationRequest = std::max(accTmp,axLimitNegative);
         /*if (sqrtf(powf(ay,2)+powf(accelerationRequest,2)) >= g*mu) {
           accelerationRequest = -sqrtf(powf(g*mu,2)-powf(ay,2))*0.9f;
           std::cout<<"decreq limited: "<<accelerationRequest<<std::endl;
@@ -745,8 +754,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         accelerationRequest = 0.0f;
         std::cout<<"rolling: "<<accelerationRequest<<std::endl;
       }else{
-        accelerationRequest = 1.0f;
-        std::cout<<"rolling aborted: "<<accelerationRequest<<std::endl;
+        m_accelerationState = true;
       }
     }
 
@@ -754,12 +762,19 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       m_accClock+=static_cast<float>(DT.count());
       if (!m_accelerationState || (m_accClock>(1.0f/m_accFreq))) {
         m_accClock = 0.0f;
-        //m_accVal = std::max((speedProfile(aimVelocityIdx)-groundSpeedCopy)/(2.0f*static_cast<float>(aimVelocityIdx+step)*m_distanceBetweenPoints),axLimitPositive);
-        m_accVal = std::min((powf(speedProfile(0),2)-powf(groundSpeedCopy,2))/(2.0f*S),axLimitPositive);
+        m_accVel = speedProfile(0);
+        m_ei=0.0f;
+        m_ePrev=0.0f;
+        //m_accVal = std::min((powf(speedProfile(0),2)-powf(groundSpeedCopy,2))/(2.0f*S),axLimitPositive);
         //std::cout<<"ax: "<<(powf(speedProfile(0),2)-powf(groundSpeedCopy,2))/(2.0f*S)<<" vdes: "<<speedProfile(0)<<" v: "<<groundSpeedCopy<<std::endl;
       }
+      //accelerationRequest = m_accVal;
 
-      accelerationRequest = m_accVal;
+      e = groundSpeedCopy-m_accVel;
+      m_ei += e*DT.count();
+      ed = (e-m_ePrev)/DT.count();
+      accTmp = m_kp*e+m_kd*ed+m_ki*m_ei;
+      accelerationRequest = std::max(accTmp,axLimitPositive);
 
       if (sqrtf(powf(ay,2)+powf(accelerationRequest,2)) >= g*mu) {
           accelerationRequest = sqrtf(powf(g*mu,2)-powf(ay,2))*0.9f;
@@ -838,13 +853,26 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     /*---------------------------------------------------------------------------*/
   } //end if(!STOP && (localPath.rows() > 2)
   else if(STOP){
-    if (std::abs(groundSpeedCopy) > 0.01f){
-      accelerationRequest = axLimitNegative;
-      //std::cout << "BREAKING TO STOP " << std::endl;
-    } else {accelerationRequest = 0.0f;}
+    if (m_specCase=false) {
+      m_ei=0.0f;
+      m_ePrev=0.0f;
+      m_accVel=0.0f
+    }
+    m_specCase=true;
   }
   else{
-    accelerationRequest = 0.0f;
+    if (m_specCase=false) {
+      m_ei=0.0f;
+      m_ePrev=0.0f;
+    }
+    m_specCase=true;
+  }
+  if (m_specCase) {
+    e = groundSpeedCopy-m_accVel;
+    m_ei += e*DT.count();
+    ed = (e-m_ePrev)/DT.count();
+    accTmp = m_kp*e+m_kd*ed+m_ki*m_ei;
+    accelerationRequest = std::max(accTmp,axLimitPositive);
   }
   m_tickDt = std::chrono::system_clock::now();
   return accelerationRequest;
