@@ -141,28 +141,26 @@ void Track::run(Eigen::MatrixXf localPath){
   float distanceToAimPoint;
   float accelerationRequest;
 
-  if (localPath.rows()<0){
+  if (localPath.rows()<=0 || (localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(1,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f && std::abs(localPath(1,1))<=0.00001f))){
     noPath = true;
-    //std::cout<<"NO PATH"<<std::endl;
+    std::cout<<"NO PATH"<<std::endl;
   }
   else{
-    if(localPath.rows() == 2){
-      // Check for stop or "one point" signal
-      if (std::abs(localPath(1,0)) <= 0.0001f && std::abs(localPath(1,1)) <= 0.0001f) {
-        Eigen::MatrixXf localPathTmp = localPath.row(0);
-        localPath.resize(1,2);
-        localPath = localPathTmp;
-        STOP = true;
-        specCase = true;
-        //std::cout << "STOP signal recieved " << std::endl;
-      }
-      else if(std::abs(localPath(0,0)) <= 0.0001f && std::abs(localPath(0,1)) <= 0.0001f && localPath.rows()<3){
-        Eigen::MatrixXf localPathTmp = localPath.row(1);
-        localPath.resize(1,2);
-        localPath = localPathTmp;
-        specCase = true;
-        //std::cout << "ONE POINT signal recieved " << std::endl;
-      }
+    // Check for stop or "one point" signal
+    if ((std::abs(localPath(localPath.rows()-1,0))<=0.00001f && std::abs(localPath(localPath.rows()-2,0))<=0.00001f && std::abs(localPath(localPath.rows()-1,1))<=0.00001f && std::abs(localPath(localPath.rows()-2,1))<=0.00001f)){
+      Eigen::MatrixXf localPathTmp = localPath.topRows(localPath.rows()-2);
+      localPath.resize(localPathTmp.rows(),2);
+      localPath = localPathTmp;
+      STOP = true;
+      specCase = true;
+      std::cout << "STOP signal recieved " << std::endl;
+    }
+    else if(localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f)){
+      Eigen::MatrixXf localPathTmp = localPath.row(1);
+      localPath.resize(1,2);
+      localPath = localPathTmp;
+      specCase = true;
+      std::cout << "ONE POINT signal recieved " << std::endl;
     }
     if (!specCase) {
       // Order path
@@ -190,7 +188,7 @@ void Track::run(Eigen::MatrixXf localPath){
         if (localPath.rows()>1) {
           //Place equidistant points
           Eigen::MatrixXf localPathCopy;
-          if (m_traceBack){
+          if (m_traceBack){ //TODO remove function if never used
             Eigen::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
             localPathCopy.resize(localPath.rows()+1,2);
             localPathCopy.row(0) = firstPoint;
@@ -236,6 +234,8 @@ void Track::run(Eigen::MatrixXf localPath){
     distanceToAimPoint=1.0f;
     accelerationRequest=0.0f;
   }
+
+  //TODO Implement with new speed planner to keep konstant velocity
 
   { /*---SEND---*/
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
