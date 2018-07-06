@@ -46,7 +46,7 @@ class Track {
   Eigen::MatrixXf orderCones(Eigen::MatrixXf localPath);
   std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
   float driverModelSharp(Eigen::MatrixXf, float);
-  float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, bool);
+  float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, bool, bool);
   std::vector<float> curvatureTriCircle(Eigen::MatrixXf, int);
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
 
@@ -117,9 +117,7 @@ class Track {
   bool m_brakingState;
   bool m_accelerationState;
   bool m_rollingState;
-  float m_critVelocity;
   float m_timeToCritVel;
-  float m_accVal{1.0f};
   float m_accClock{0.0f};
   float m_minRadius{1000000.0f};
   float m_apexRadius{1000000.0f};
