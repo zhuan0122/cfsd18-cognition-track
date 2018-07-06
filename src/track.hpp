@@ -46,7 +46,7 @@ class Track {
   Eigen::MatrixXf orderCones(Eigen::MatrixXf localPath);
   std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
   float driverModelSharp(Eigen::MatrixXf, float);
-  float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, bool);
+  float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, bool, bool);
   std::vector<float> curvatureTriCircle(Eigen::MatrixXf, int);
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
 
@@ -68,6 +68,10 @@ class Track {
   float m_C{m_K1};
   float m_c{1.0f};
   // velocity control
+  float m_diffToBrakeVel{0.5f};
+  float m_critDiff{0.1f};
+  float m_critDiff2{0.1f};
+  float m_accFreq{10};
   float m_axSpeedProfile{-1.0f};
   bool m_useAyReading{true};
   float m_velocityLimit{5.0f};
@@ -75,6 +79,20 @@ class Track {
   float m_axLimitPositive{5.0f};
   float m_axLimitNegative{-5.0f};
   float m_headingErrorDependency{0.7f};
+  float m_curveDetectionAngle{1.0f};
+  int m_curveDetectionPoints{20};
+  //....controller
+  float m_aimVel{5.0f};
+  float m_keepConstVel{-1.0f};
+  float m_aKp{0.1f};
+  float m_aKd{0.0f};
+  float m_aKi{0.0f};
+  float m_bKp{0.1f};
+  float m_bKd{0.0f};
+  float m_bKi{0.0f};
+  float m_sKp{0.1f};
+  float m_sKd{0.0f};
+  float m_sKi{0.0f};
   // curvature estimation
   bool m_polyFit{false};
   int m_step{5};
@@ -93,10 +111,21 @@ class Track {
   std::mutex m_lateralAccelerationMutex;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
+  std::chrono::time_point<std::chrono::system_clock> m_tickDt;
+  std::chrono::time_point<std::chrono::system_clock> m_tockDt;
   bool m_newClock;
   bool m_brakingState;
   bool m_accelerationState;
   bool m_rollingState;
+  float m_timeToCritVel;
+  float m_accClock{0.0f};
+  float m_minRadius{1000000.0f};
+  float m_apexRadius{1000000.0f};
+  bool m_specCase;
+  float m_ei;
+  float m_ePrev;
+  float m_fullTime;
+  bool m_start;
   float m_prevHeadingRequest;
   std::mutex m_sendMutex;
 };
