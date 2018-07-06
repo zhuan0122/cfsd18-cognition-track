@@ -43,6 +43,7 @@ class Track {
   void run(Eigen::MatrixXf localPath);//std::map< double, std::vector<float> >
   Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
   Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
+  Eigen::MatrixXf orderCones(Eigen::MatrixXf localPath);
   std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
   float driverModelSharp(Eigen::MatrixXf, float);
   float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, bool);
@@ -72,6 +73,7 @@ class Track {
   float m_critDiff2{0.1f};
   float m_accFreq{10};
   float m_axSpeedProfile{-1.0f};
+  bool m_useAyReading{true};
   float m_velocityLimit{5.0f};
   float m_mu{0.9f};
   float m_axLimitPositive{5.0f};
@@ -105,6 +107,8 @@ class Track {
   /* Member variables */
   float m_groundSpeed;
   std::mutex m_groundSpeedMutex;
+  float m_lateralAcceleration;
+  std::mutex m_lateralAccelerationMutex;
   std::chrono::time_point<std::chrono::system_clock> m_tick;
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   std::chrono::time_point<std::chrono::system_clock> m_tickDt;
@@ -113,7 +117,6 @@ class Track {
   bool m_brakingState;
   bool m_accelerationState;
   bool m_rollingState;
-  bool m_constantVelocityState;
   float m_critVelocity;
   float m_timeToCritVel;
   float m_accVal{1.0f};
@@ -125,6 +128,7 @@ class Track {
   float m_ePrev;
   float m_fullTime;
   bool m_start;
+  float m_prevHeadingRequest;
   std::mutex m_sendMutex;
 };
 
