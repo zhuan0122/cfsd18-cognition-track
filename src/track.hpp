@@ -58,8 +58,10 @@ class Track {
   float m_distanceBetweenPoints{0.5f};
   bool m_traceBack{false};
   // steering
-  bool m_moveOrigin{false};
+  bool m_moveOrigin{true};
   float m_previewTime{0.3f};
+  float m_minPrevDist{1.0f};
+  float m_steerRate{50.0f};
   //sharp
   bool m_sharp{false};
   int m_nSharp{10};
@@ -105,6 +107,7 @@ class Track {
   float m_frontToCog{0.765f};
 
   /* Member variables */
+  float const m_PI = 3.14159265f;
   float m_groundSpeed;
   std::mutex m_groundSpeedMutex;
   float m_lateralAcceleration;
@@ -113,6 +116,8 @@ class Track {
   std::chrono::time_point<std::chrono::system_clock> m_tock;
   std::chrono::time_point<std::chrono::system_clock> m_tickDt;
   std::chrono::time_point<std::chrono::system_clock> m_tockDt;
+  std::chrono::time_point<std::chrono::system_clock> m_steerTickDt;
+  std::chrono::time_point<std::chrono::system_clock> m_steerTockDt;
   bool m_newClock;
   bool m_brakingState;
   bool m_accelerationState;
