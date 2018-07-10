@@ -40,7 +40,8 @@ class Track {
   void setUp(std::map<std::string, std::string> commandlineArguments);
   void tearDown();
 
-  void run(Eigen::MatrixXf localPath);//std::map< double, std::vector<float> >
+  void run(Eigen::MatrixXf localPath);
+  Eigen::VectorXf curveFit(Eigen::MatrixXf matrix);
   Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
   Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
   Eigen::MatrixXf orderCones(Eigen::MatrixXf localPath);
@@ -59,6 +60,7 @@ class Track {
   bool m_traceBack{false};
   // steering
   bool m_moveOrigin{true};
+  bool m_curveFitPath{true};
   float m_previewTime{0.3f};
   float m_minPrevDist{1.0f};
   float m_steerRate{50.0f};

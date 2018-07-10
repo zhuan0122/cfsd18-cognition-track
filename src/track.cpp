@@ -65,9 +65,11 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_traceBack=(commandlineArguments["useTraceBack"].size() != 0) ? (std::stoi(commandlineArguments["useTraceBack"])==1) : (false);
   // steering
   m_moveOrigin=(commandlineArguments["useMoveOrigin"].size() != 0) ? (std::stoi(commandlineArguments["useMoveOrigin"])==1) : (true);
+  m_curveFitPath=(commandlineArguments["useCurveFitPath"].size() != 0) ? (std::stoi(commandlineArguments["useCurveFitPath"])==1) : (true);
   m_previewTime=(commandlineArguments["previewTime"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTime"]))) : (m_previewTime);
   m_minPrevDist=(commandlineArguments["minPrevDist"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minPrevDist"]))) : (m_minPrevDist);
   m_steerRate=(commandlineArguments["steerRate"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["steerRate"]))) : (m_steerRate);
+
   // sharp
   m_sharp=(commandlineArguments["useSharp"].size() != 0) ? (std::stoi(commandlineArguments["useSharp"])==1) : (false);
   m_nSharp=(commandlineArguments["nSharpPreviewPoints"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nSharpPreviewPoints"]))) : (m_nSharp);
@@ -288,6 +290,48 @@ void Track::run(Eigen::MatrixXf localPath){
   } //end mutex scope
 }//end run
 
+Eigen::VectorXf Track::curveFit(Eigen::MatrixXf matrix)
+{
+  Eigen::VectorXf a;
+  Eigen::MatrixXf M;
+  Eigen::VectorXf b = Eigen::VectorXf::Zero(m_polyDeg+1);
+  M.resize(m_polyDeg+1,m_polyDeg+1);
+  std::vector<float> v(2*m_polyDeg);
+  std::fill(v.begin(), v.end(), 0.0f);
+  for (uint32_t q = 0; q < matrix.rows(); q++) {
+    for (uint32_t t = 0; t < v.size(); t++) {
+      v[t] += powf(matrix(q,0),t+1);
+      if (t<b.size()) {
+        b(t) += matrix(q,1)*powf(matrix(q,0),t);
+      }
+    }
+  }
+  int c = 0;
+  for (uint32_t q = 0; q < M.rows(); q++) {
+    for (uint32_t t = 0; t < M.cols(); t++) {
+      if (q==0 && t==0) {
+        M(q,t)=matrix.rows();
+      }
+      else if (q==0) {
+        M(q,t)=v[t-1];
+      }
+      else
+      {
+        M(q,t)=v[t+c];
+      }
+    }
+    if (q>0) {
+      c++;
+    }
+  }
+  a = M.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
+  /*std::cout << "Here is the matrix M:\n" << M << std::endl;
+  std::cout << "Here is the right hand side b:\n" << b << std::endl;
+  std::cout << "The least-squares solution is:\n"
+      << a << std::endl;
+  std::cout<<"localPath:\n "<<matrix<<std::endl;*/
+  return a;
+}
 
 Eigen::RowVector2f Track::traceBackToClosestPoint(Eigen::RowVector2f p1, Eigen::RowVector2f p2, Eigen::RowVector2f q)
 {
@@ -505,6 +549,18 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
         localPath.resize(localPath.rows()-count,2);
         localPath = localPathTmp;
+        if (m_curveFitPath) {
+          Eigen::VectorXf a = curveFit(localPath);
+          for (uint32_t i = 0; i < localPath.rows(); i++) {
+            for (uint32_t j = 0; j < a.size(); j++) {
+              if (j==0) {
+                localPath(i,1) = 0.0f;
+              }
+              localPath(i,1) += a(j)*powf(localPath(i,0),j);
+            }
+          }
+          //std::cout<<"New localPath:\n "<<localPath<<std::endl;
+        }
       }
     }
   }
@@ -1028,6 +1084,52 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
         }
       }
       curveRadii.insert(curveRadii.end(), R.begin(), R.end());
+
+      /*Eigen::MatrixXf M;
+      Eigen::VectorXf b;
+      M.resize(m_polyDeg+1,m_polyDeg+1);
+      b.resize(m_polyDeg+1);
+      std::vector<float> v(2*m_polyDeg);
+      std::fill(v.begin(), v.end(), 0.0f);
+      float ySum = 0.0f;
+      for (uint32_t q = 0; q < x.size(); q++) {
+        for (uint32_t t = 0; t < v.size(); t++) {
+          v[t] += powf(x(q),t+1);
+          ySum += y(q);
+        }
+      }
+      std::cout<<"v = "<<std::endl;
+      for (size_t gg = 0; gg < v.size(); gg++) {
+        std::cout<<v[gg]<<std::endl;
+      }
+      int c = 0;
+      for (uint32_t q = 0; q < M.rows(); q++) {
+        for (uint32_t t = 0; t < M.cols(); t++) {
+          if (q==0 && t==0) {
+            M(q,t)=x.size();
+          }
+          else if (q==0) {
+            M(q,t)=v[t-1];
+          }
+          else
+          {
+            M(q,t)=v[t+c];
+          }
+        }
+        if (q>0) {
+          c++;
+          b(q)=ySum*v[q-1];
+        }
+        else{
+          b(q)=ySum;
+        }
+      }
+      std::cout << "Here is the matrix M:\n" << M << std::endl;
+      std::cout << "Here is the right hand side b:\n" << b << std::endl;
+      std::cout << "The least-squares solution is:\n"
+          << M.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b) << std::endl;*/
+      //std::cout<<"Here is a: "<<a<<std::endl;
+
     } // end p-loop
   } // end P-loop
 
