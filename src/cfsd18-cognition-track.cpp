@@ -38,14 +38,14 @@ int32_t main(int32_t argc, char **argv) {
   } else {
     uint32_t const surfaceId=(commandlineArguments["surfaceId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["surfaceId"])) : (0);
     uint32_t const speedId=(commandlineArguments["speedId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId"])) : (0);
+    uint32_t const slamId=(commandlineArguments["slamId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"])) : (0);
     uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(221);
     // Interface to a running OpenDaVINCI session
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
     Track track(commandlineArguments, od4);
-    int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(10);
+    int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(50);
     int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(10);
-
     Collector collector(track,gatheringTimeMs, separationTimeMs, 1);
 
     auto surfaceEnvelope{[senderStamp = surfaceId,&collector](cluon::data::Envelope &&envelope)
@@ -62,10 +62,19 @@ int32_t main(int32_t argc, char **argv) {
         }
       }
     };
+    auto slamEnvelope{[&surfer = track, senderStamp = slamId](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          surfer.nextContainer(envelope);
+        }
+      }
+    };
 
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
     od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
     od4.dataTrigger(opendlv::proxy::AccelerationReading::ID(),speedEnvelope);
+    od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),slamEnvelope);
+
 
     // Just sleep as this microservice is data driven.
     using namespace std::literals::chrono_literals;

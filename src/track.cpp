@@ -39,14 +39,17 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_accelerationState{false},
   m_rollingState{false},
   m_timeToCritVel{},
-  m_minRadius{},
-  m_apexRadius{},
+  m_accClock{0.0f},
+  m_minRadius{1000000.0f},
+  m_apexRadius{1000000.0f},
   m_specCase{false},
   m_ei{0.0f},
   m_ePrev{0.0f},
   m_fullTime{0.0f},
   m_start{true},
   m_prevHeadingRequest{0.0f},
+  m_slamActivated{false},
+  m_paramsUpdated{false},
   m_sendMutex()
 {
  setUp(commandlineArguments);
@@ -60,7 +63,6 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
 {
   m_senderStamp=(commandlineArguments["id"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["id"]))) : (m_senderStamp);
   // path
- //TODO do we really need to static cast a stof to float?
   m_distanceBetweenPoints=(commandlineArguments["distanceBetweenPoints"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["distanceBetweenPoints"]))) : (m_distanceBetweenPoints);
   m_traceBack=(commandlineArguments["useTraceBack"].size() != 0) ? (std::stoi(commandlineArguments["useTraceBack"])==1) : (false);
   // steering
@@ -69,7 +71,9 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_previewTime=(commandlineArguments["previewTime"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTime"]))) : (m_previewTime);
   m_minPrevDist=(commandlineArguments["minPrevDist"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minPrevDist"]))) : (m_minPrevDist);
   m_steerRate=(commandlineArguments["steerRate"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["steerRate"]))) : (m_steerRate);
-
+  m_previewTimeSlam=(commandlineArguments["previewTimeSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTimeSlam"]))) : (m_previewTimeSlam);
+  m_minPrevDistSlam=(commandlineArguments["minPrevDistSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minPrevDistSlam"]))) : (m_minPrevDistSlam);
+  m_steerRateSlam=(commandlineArguments["steerRateSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["steerRateSlam"]))) : (m_steerRateSlam);
   // sharp
   m_sharp=(commandlineArguments["useSharp"].size() != 0) ? (std::stoi(commandlineArguments["useSharp"])==1) : (false);
   m_nSharp=(commandlineArguments["nSharpPreviewPoints"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nSharpPreviewPoints"]))) : (m_nSharp);
@@ -160,15 +164,30 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(a_container));
     m_groundSpeed = groundSpeed.groundSpeed();
   }
-  if (a_container.dataType() == opendlv::proxy::AccelerationReading::ID()) {
+  else if (a_container.dataType() == opendlv::proxy::AccelerationReading::ID()) {
     std::unique_lock<std::mutex> lockLateralAcceleration(m_lateralAccelerationMutex);
     auto lateralAcceleration = cluon::extractMessage<opendlv::proxy::AccelerationReading>(std::move(a_container));
     m_lateralAcceleration = lateralAcceleration.accelerationY();
   }
+  else if (!m_paramsUpdated) {
+    if (a_container.dataType() == opendlv::logic::perception::ObjectDirection::ID()) {
+      m_slamActivated = true;
+    }
+  }
 }
-
-
+bool Track::slamParams()
+{
+  m_keepConstVel = -1.0f;
+  m_curveFitPath = false;
+  m_steerRate = m_steerRateSlam;
+  m_minPrevDist = m_minPrevDistSlam;
+  m_previewTime = m_previewTimeSlam;
+  return true;
+}
 void Track::run(Eigen::MatrixXf localPath){
+  if (m_slamActivated && !m_paramsUpdated) {
+    m_paramsUpdated = slamParams();
+  }
   bool noPath = false;
   bool specCase = false;
   int count = 0;
@@ -325,11 +344,11 @@ Eigen::VectorXf Track::curveFit(Eigen::MatrixXf matrix)
     }
   }
   a = M.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
-  /*std::cout << "Here is the matrix M:\n" << M << std::endl;
+  std::cout << "Here is the matrix M:\n" << M << std::endl;
   std::cout << "Here is the right hand side b:\n" << b << std::endl;
   std::cout << "The least-squares solution is:\n"
       << a << std::endl;
-  std::cout<<"localPath:\n "<<matrix<<std::endl;*/
+  std::cout<<"localPath:\n "<<matrix<<std::endl;
   return a;
 }
 
@@ -550,6 +569,17 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         localPath.resize(localPath.rows()-count,2);
         localPath = localPathTmp;
         if (m_curveFitPath) {
+          float sumPoints = localPath.row(0).norm();
+          int k=0;
+          while (10.0f >= sumPoints && k < localPath.rows()-1) {
+            sumPoints += (localPath.row(k+1)-localPath.row(k)).norm();
+            k++;
+            if (localPath(k+1,0)<localPath(k,0)) {
+              break;
+            }
+          }
+          localPath = localPath.topRows(k);
+          std::cout<<"k: "<<k<<" localPath: "<<localPath<<std::endl;
           Eigen::VectorXf a = curveFit(localPath);
           for (uint32_t i = 0; i < localPath.rows(); i++) {
             for (uint32_t j = 0; j < a.size(); j++) {
@@ -559,7 +589,21 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
               localPath(i,1) += a(j)*powf(localPath(i,0),j);
             }
           }
-          //std::cout<<"New localPath:\n "<<localPath<<std::endl;
+          std::cout<<"New localPath:\n "<<localPath<<std::endl;
+        std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+        cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+        opendlv::body::ActuatorInfo plot;
+        plot.x(a(1));
+        plot.y(a(2));
+        if (a.size()>3) {
+          plot.z(a(3));
+        }
+        else{
+          plot.z(0.0f);
+        }
+        plot.minValue(a(0));
+        plot.maxValue(localPath(0,0));
+        m_od4.send(plot, sampleTime, 11);
         }
       }
     }

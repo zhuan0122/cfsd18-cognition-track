@@ -41,6 +41,7 @@ class Track {
   void tearDown();
 
   void run(Eigen::MatrixXf localPath);
+  bool slamParams();
   Eigen::VectorXf curveFit(Eigen::MatrixXf matrix);
   Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
   Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
@@ -64,6 +65,9 @@ class Track {
   float m_previewTime{0.3f};
   float m_minPrevDist{1.0f};
   float m_steerRate{50.0f};
+  float m_previewTimeSlam{0.3f};
+  float m_minPrevDistSlam{1.0f};
+  float m_steerRateSlam{50.0f};
   //sharp
   bool m_sharp{false};
   int m_nSharp{10};
@@ -125,15 +129,17 @@ class Track {
   bool m_accelerationState;
   bool m_rollingState;
   float m_timeToCritVel;
-  float m_accClock{0.0f};
-  float m_minRadius{1000000.0f};
-  float m_apexRadius{1000000.0f};
+  float m_accClock;
+  float m_minRadius;
+  float m_apexRadius;
   bool m_specCase;
   float m_ei;
   float m_ePrev;
   float m_fullTime;
   bool m_start;
   float m_prevHeadingRequest;
+  bool m_slamActivated;
+  bool m_paramsUpdated;
   std::mutex m_sendMutex;
 };
 
