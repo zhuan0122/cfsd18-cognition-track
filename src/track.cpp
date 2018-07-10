@@ -344,11 +344,11 @@ Eigen::VectorXf Track::curveFit(Eigen::MatrixXf matrix)
     }
   }
   a = M.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
-  std::cout << "Here is the matrix M:\n" << M << std::endl;
+  /*std::cout << "Here is the matrix M:\n" << M << std::endl;
   std::cout << "Here is the right hand side b:\n" << b << std::endl;
   std::cout << "The least-squares solution is:\n"
       << a << std::endl;
-  std::cout<<"localPath:\n "<<matrix<<std::endl;
+  std::cout<<"localPath:\n "<<matrix<<std::endl;*/
   return a;
 }
 
@@ -579,7 +579,6 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
             }
           }
           localPath = localPath.topRows(k);
-          std::cout<<"k: "<<k<<" localPath: "<<localPath<<std::endl;
           Eigen::VectorXf a = curveFit(localPath);
           for (uint32_t i = 0; i < localPath.rows(); i++) {
             for (uint32_t j = 0; j < a.size(); j++) {
@@ -589,7 +588,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
               localPath(i,1) += a(j)*powf(localPath(i,0),j);
             }
           }
-          std::cout<<"New localPath:\n "<<localPath<<std::endl;
+          //std::cout<<"New localPath:\n "<<localPath<<std::endl;
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
         cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
         opendlv::body::ActuatorInfo plot;
