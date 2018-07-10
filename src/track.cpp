@@ -580,6 +580,10 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
           }
           localPath = localPath.topRows(k);
           std::cout<<"k: "<<k<<" localPath: "<<localPath<<std::endl;
+          float xNorm = localPath(0,0);
+          float yNorm = localPath(0,1);
+          localPath.col(0)=localPath.col(0).array()-xNorm;
+          localPath.col(1)=localPath.col(1).array()-yNorm;
           Eigen::VectorXf a = curveFit(localPath);
           for (uint32_t i = 0; i < localPath.rows(); i++) {
             for (uint32_t j = 0; j < a.size(); j++) {
@@ -589,6 +593,8 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
               localPath(i,1) += a(j)*powf(localPath(i,0),j);
             }
           }
+          localPath.col(0)=localPath.col(0).array()+xNorm;
+          localPath.col(1)=localPath.col(1).array()+yNorm;
           std::cout<<"New localPath:\n "<<localPath<<std::endl;
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
         cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
