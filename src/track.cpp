@@ -202,6 +202,7 @@ void Track::run(Eigen::MatrixXf localPath){
   }
   if (localPath.rows()<=0 || (localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(1,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f && std::abs(localPath(1,1))<=0.00001f))){
     noPath = true;
+    std::cout<<"NO PATH RECIEVED :"<<localPath<<std::endl;
   }
   else{
     // Check for stop or "one point" signal
@@ -579,7 +580,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
             }
           }
           localPath = localPath.topRows(k);
-          std::cout<<"k: "<<k<<" localPath: "<<localPath<<std::endl;
+          //std::cout<<"k: "<<k<<" localPath: "<<localPath<<std::endl;
           float xNorm = localPath(0,0);
           float yNorm = localPath(0,1);
           localPath.col(0)=localPath.col(0).array()-xNorm;
@@ -595,7 +596,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
           }
           localPath.col(0)=localPath.col(0).array()+xNorm;
           localPath.col(1)=localPath.col(1).array()+yNorm;
-          std::cout<<"New localPath:\n "<<localPath<<std::endl;
+          //std::cout<<"New localPath:\n "<<localPath<<std::endl;
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
         cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
         opendlv::body::ActuatorInfo plot;
@@ -758,6 +759,15 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       if (aIdx==0 && (m_apexRadius-m_minRadius)>0) {
         m_apexRadius = m_minRadius;
       }
+      std::chrono::system_clock::time_point tp = std::chrono::system_clock::now(); //draw curve start point and end of angle point
+cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+opendlv::body::ActuatorInfo plot;
+plot.x(localPath(aIdx,0));
+plot.y(localPath(aIdx,1));
+plot.z(localPath(aIdx+curveDetectionPoints,0));
+plot.minValue(localPath(aIdx+curveDetectionPoints,1));
+m_od4.send(plot, sampleTime, 55);
+
       speedProfile(aIdx)=speedProfile(rIdx);
     }
 
@@ -778,6 +788,10 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       tb = (speedProfile(i)-groundSpeedCopy)/(axLimitNegative);//time to reach velocity if braking max
       tv = s/groundSpeedCopy;
       diff = tv-tb; // when we need to brake, if =0 we need to brake now, if <0 we are braking too late
+      /*if (i==0) {
+        std::cout<<"s: "<<s<<" tb: "<<tb<<" tv: "<<tv<<" diff: "<<diff<<std::endl;
+        std::cout<<"speedProfile(i): "<<speedProfile(i)<<" groundSpeed: "<<groundSpeedCopy<<std::endl;
+      }*/
       if(diff<critDiff && tb > 0){ // save critical brake point
         critDiff=diff;
         critTb = tb;
@@ -787,9 +801,11 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
 
     /*---------------State selection---------------*/
     /*BRAKING STATE*/
+    //std::cout<<"critDiff: "<<critDiff<<std::endl;
     if(critDiff<=m_critDiff){ //braking is critical
       if (((groundSpeedCopy-speedProfile(idx))>m_diffToBrakeVel) || m_brakingState) {
         if (!m_brakingState) {
+          std::cout<<"ENTER BRAKING STATE: "<<std::endl;
         }
         m_aimVel = speedProfile(idx);
         m_timeToCritVel = critTb;
@@ -801,6 +817,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
         m_apexRadius=100000.0f;
       }
       else{ //Enter rolling state instead of braking
+        std::cout<<"ENTER ROLLING STATE (from braking) "<<std::endl;
         m_brakingState = true;
         m_rollingState = true;
         m_accelerationState = false;
@@ -809,9 +826,10 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     /*ACCELERATION STATE*/
     if (!m_brakingState){
       if (!m_accelerationState) {
+        std::cout<<"ENTER ACCELERATION STATE: "<<std::endl;
         m_accClock = 0.0f;
         if (aIdx<0) {
-          m_aimVel = speedProfile(0)*(1.0f-headingError*headingErrorDependency);
+          m_aimVel = (speedProfile(0)*(1.0f-headingError*headingErrorDependency)>groundSpeedCopy) ? (speedProfile(0)*(1.0f-headingError*headingErrorDependency)) : (groundSpeedCopy);
         }
         m_ei=0.0f;
         m_ePrev=0.0f;
@@ -819,14 +837,17 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       if (aIdx==0) {
         if ((m_minRadius-m_apexRadius)>1.0f) {
           if (m_rollingState) {
+            std::cout<<" Apex passed -> diff: "<<m_minRadius-m_apexRadius<< std::endl;
           }
-          m_aimVel = speedProfile(0)*(1.0f-headingError*headingErrorDependency);
+          m_aimVel = (speedProfile(0)*(1.0f-headingError*headingErrorDependency)>groundSpeedCopy) ? (speedProfile(0)*(1.0f-headingError*headingErrorDependency)) : (groundSpeedCopy);
           m_apexRadius=0.0f;
           m_brakingState = false;
           m_rollingState = false;
           m_accelerationState = true;
         }
         else{
+          std::cout<<" Before apex -> diff: "<<m_minRadius-m_apexRadius<<std::endl;
+std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
           m_brakingState = false;
           m_rollingState = true;
           m_accelerationState = false;
@@ -841,6 +862,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     /*ROLLING STATE*/
     if (!m_brakingState && !m_accelerationState) {
       if (!m_rollingState) {
+        std::cout<<"ENTER ROLLING STATE "<<std::endl;
       }
       m_brakingState = false;
       m_rollingState = true;
@@ -854,6 +876,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       m_ePrev=e;
       if (groundSpeedCopy>m_aimVel) {
         float accTmp = m_bKp*e+m_bKd*ed+m_bKi*m_ei;
+        std::cout<<"braking accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" groundspeed: "<<groundSpeedCopy<<" kpe: "<<m_bKp*e<<" kiei: "<<m_bKi*m_ei<<" kded: "<<m_bKd*ed<<std::endl;
         accelerationRequest = std::max(accTmp,axLimitNegative);
       }
       else{
@@ -865,6 +888,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     if (m_rollingState) {
       if (groundSpeedCopy>1.0f) {
         accelerationRequest = 0.0f;
+        std::cout<<"rolling: "<<accelerationRequest<<std::endl;
       }else{
         m_accelerationState = true;
         m_rollingState = false;
@@ -875,7 +899,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       m_accClock+=DT.count();
       if (m_accClock>(1.0f/m_accFreq)) {
         m_accClock = 0.0f;
-        m_aimVel = speedProfile(0);
+        m_aimVel = (speedProfile(0)*(1.0f-headingError*headingErrorDependency)>groundSpeedCopy) ? (speedProfile(0)*(1.0f-headingError*headingErrorDependency)) : (groundSpeedCopy);
         m_ei=0.0f;
         m_ePrev=0.0f;
       }
@@ -885,12 +909,13 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       ed = (e-m_ePrev)/dt;
       m_ePrev=e;
       float accTmp = m_aKp*e+m_aKd*ed+m_aKi*m_ei;
-      if (m_aimVel>groundSpeedCopy) {
+      if (m_aimVel>=groundSpeedCopy) {
         accelerationRequest = std::min(accTmp,axLimitPositive);
       }
       else {
         accelerationRequest = 0.0f;
       }
+      std::cout<<"accelerating accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" groundspeed: "<<groundSpeedCopy<<" accelerationRequest: "<<accelerationRequest<<" kpe: "<<m_aKp*e<<" kiei: "<<m_aKi*m_ei<<" kded: "<<m_aKd*ed<<std::endl;
     }
   } //end if(!STOP && (localPath.rows() > 2 ....)
   /*SET SPECIAL CASES*/
@@ -914,6 +939,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     ed = (e-m_ePrev)/dt;
     m_ePrev=e;
     float accTmp = m_bKp*e+m_bKd*ed+m_bKi*m_ei;
+    std::cout<<"BRAKING TO STOP accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" kpe: "<<m_bKp*e<<" kiei: "<<m_bKi*m_ei<<" kded: "<<m_bKd*ed<<std::endl;
     accelerationRequest = std::max(accTmp,axLimitNegative);
   }
   else if (m_start) {
@@ -925,6 +951,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     if (accTmp<0) {
       accelerationRequest=-accelerationRequest;
     }
+    std::cout<<"START, acc = "<<accelerationRequest<< " m_aimVel: "<<m_aimVel<<std::endl;
     if (groundSpeedCopy > m_aimVel) {
       m_start = false;
     }
@@ -938,6 +965,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     if (accTmp<0) {
       accelerationRequest=-accelerationRequest;
     }
+     std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< "aim velocity: "<<m_keepConstVel<<std::endl;
   }
   else if (noPath || (localPath.rows()<3)) {
     e = m_aimVel-groundSpeedCopy;
@@ -948,6 +976,8 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     if (accTmp<0) {
       accelerationRequest=-accelerationRequest;
     }
+    std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< " aim velocity: "<<m_keepConstVel<<std::endl;
+    std::cout<<"localPath: "<<localPath<<std::endl;
   }
   m_tickDt = std::chrono::system_clock::now();
   return accelerationRequest;
