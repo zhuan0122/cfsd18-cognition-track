@@ -344,11 +344,11 @@ Eigen::VectorXf Track::curveFit(Eigen::MatrixXf matrix)
     }
   }
   a = M.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b);
-  std::cout << "Here is the matrix M:\n" << M << std::endl;
+  /*std::cout << "Here is the matrix M:\n" << M << std::endl;
   std::cout << "Here is the right hand side b:\n" << b << std::endl;
   std::cout << "The least-squares solution is:\n"
       << a << std::endl;
-  std::cout<<"localPath:\n "<<matrix<<std::endl;
+  std::cout<<"localPath:\n "<<matrix<<std::endl;*/
   return a;
 }
 
@@ -579,7 +579,6 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
             }
           }
           localPath = localPath.topRows(k);
-          std::cout<<"k: "<<k<<" localPath: "<<localPath<<std::endl;
           float xNorm = localPath(0,0);
           float yNorm = localPath(0,1);
           localPath.col(0)=localPath.col(0).array()-xNorm;
@@ -595,7 +594,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
           }
           localPath.col(0)=localPath.col(0).array()+xNorm;
           localPath.col(1)=localPath.col(1).array()+yNorm;
-          std::cout<<"New localPath:\n "<<localPath<<std::endl;
+          //std::cout<<"New localPath:\n "<<localPath<<std::endl;
         std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
         cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
         opendlv::body::ActuatorInfo plot;
@@ -1134,52 +1133,6 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
         }
       }
       curveRadii.insert(curveRadii.end(), R.begin(), R.end());
-
-      /*Eigen::MatrixXf M;
-      Eigen::VectorXf b;
-      M.resize(m_polyDeg+1,m_polyDeg+1);
-      b.resize(m_polyDeg+1);
-      std::vector<float> v(2*m_polyDeg);
-      std::fill(v.begin(), v.end(), 0.0f);
-      float ySum = 0.0f;
-      for (uint32_t q = 0; q < x.size(); q++) {
-        for (uint32_t t = 0; t < v.size(); t++) {
-          v[t] += powf(x(q),t+1);
-          ySum += y(q);
-        }
-      }
-      std::cout<<"v = "<<std::endl;
-      for (size_t gg = 0; gg < v.size(); gg++) {
-        std::cout<<v[gg]<<std::endl;
-      }
-      int c = 0;
-      for (uint32_t q = 0; q < M.rows(); q++) {
-        for (uint32_t t = 0; t < M.cols(); t++) {
-          if (q==0 && t==0) {
-            M(q,t)=x.size();
-          }
-          else if (q==0) {
-            M(q,t)=v[t-1];
-          }
-          else
-          {
-            M(q,t)=v[t+c];
-          }
-        }
-        if (q>0) {
-          c++;
-          b(q)=ySum*v[q-1];
-        }
-        else{
-          b(q)=ySum;
-        }
-      }
-      std::cout << "Here is the matrix M:\n" << M << std::endl;
-      std::cout << "Here is the right hand side b:\n" << b << std::endl;
-      std::cout << "The least-squares solution is:\n"
-          << M.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(b) << std::endl;*/
-      //std::cout<<"Here is a: "<<a<<std::endl;
-
     } // end p-loop
   } // end P-loop
 
