@@ -129,7 +129,7 @@ void Track::tearDown()
 {
 }
 
-void Track::receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea> currentFrame){
+void Track::receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea> currentFrame, cluon::data::TimeStamp sampleTime){
   m_tick = std::chrono::system_clock::now();
   std::reverse_iterator<std::map<int,opendlv::logic::perception::GroundSurfaceArea>::iterator> it;
   it = currentFrame.rbegin();
@@ -146,15 +146,14 @@ void Track::receiveCombinedMessage(std::map<int,opendlv::logic::perception::Grou
     float x4 = surfaceArea.x4();
     float y4 = surfaceArea.y4();
 
-    localPath(2*I,0)=(x1+x2)/2.0f;;
+    localPath(2*I,0)=(x1+x2)/2.0f;
     localPath(2*I,1)=(y1+y2)/2.0f;
     localPath(2*I+1,0)=(x3+x4)/2.0f;
-    localPath(2*I+1,1)=(y3+y4)/2.0f;;
+    localPath(2*I+1,1)=(y3+y4)/2.0f;
     it++;
     I++;
   }
-
-  Track::run(localPath);
+  Track::run(localPath, sampleTime);
 } // End of recieveCombinedMessage
 
 void Track::nextContainer(cluon::data::Envelope &a_container)
@@ -184,7 +183,7 @@ bool Track::slamParams()
   m_previewTime = m_previewTimeSlam;
   return true;
 }
-void Track::run(Eigen::MatrixXf localPath){
+void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
   if (m_slamActivated && !m_paramsUpdated) {
     m_paramsUpdated = slamParams();
   }
@@ -286,8 +285,6 @@ void Track::run(Eigen::MatrixXf localPath){
 
   { /*---SEND---*/
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
-    std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
-    cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
     opendlv::logic::action::AimPoint steer;
     steer.azimuthAngle(headingRequest);
     steer.distance(distanceToAimPoint);

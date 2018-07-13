@@ -33,14 +33,14 @@ class Track {
   Track(Track const &) = delete;
   Track &operator=(Track const &) = delete;
   virtual ~Track();
-  void receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea>);
+  void receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea>, cluon::data::TimeStamp);
   void nextContainer(cluon::data::Envelope &);
 
  private:
   void setUp(std::map<std::string, std::string> commandlineArguments);
   void tearDown();
 
-  void run(Eigen::MatrixXf localPath);
+  void run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime);
   bool slamParams();
   Eigen::VectorXf curveFit(Eigen::MatrixXf matrix);
   Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
