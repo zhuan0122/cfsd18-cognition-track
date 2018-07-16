@@ -226,7 +226,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
       //One cone -> one point
       if (m_ignoreOnePoint) {
         noPath = true;
-        std::cout<<"One Point Path Ignored"<<std::endl;
+        //std::cout<<"One Point Path Ignored"<<std::endl;
       }
       else{
         Eigen::MatrixXf localPathTmp = localPath.row(1);
@@ -241,7 +241,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
       localPath.resize(1,2);
       localPath = localPathTmp;
       specCase = true;
-      std::cout<<"One Point Signal recieved"<<std::endl;
+      //std::cout<<"One Point Signal recieved"<<std::endl;
     }
     if (!specCase) {
       // Order path
@@ -286,17 +286,17 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
             if (std::abs(angle)>m_curveDetectionAngle) {
               if (angle<0.0f) {
                 m_inRightCurve = true;
-                std::cout<<"in right curve"<<std::endl;
+                //std::cout<<"in right curve"<<std::endl;
               }
               else{
                 m_inLeftCurve = true;
-                std::cout<<"in left curve"<<std::endl;
+                //std::cout<<"in left curve"<<std::endl;
               }
             }
             else if ((m_inLeftCurve || m_inRightCurve) && std::abs(angle)<0.1f) {
               m_inLeftCurve=false;
               m_inRightCurve=false;
-              std::cout<<"Exit curve"<<std::endl;
+              //std::cout<<"Exit curve"<<std::endl;
             }
           }
         } //else One point
@@ -732,7 +732,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
       }
       else {
         headingRequest = dt*m_curveLimitedSteerRate*m_PI/180.0f + m_prevHeadingRequest;
-        std::cout<<"curve limited headingRequest: "<<headingRequest<<std::endl;
+        //std::cout<<"curve limited headingRequest: "<<headingRequest<<std::endl;
       }
     }
     else{
@@ -741,7 +741,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
       }
       else {
         headingRequest = -dt*m_curveLimitedSteerRate*m_PI/180.0f + m_prevHeadingRequest;
-        std::cout<<"curve limited headingRequest: "<<headingRequest<<std::endl;
+        //std::cout<<"curve limited headingRequest: "<<headingRequest<<std::endl;
       }
     }
   }
