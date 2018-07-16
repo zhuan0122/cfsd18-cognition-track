@@ -984,6 +984,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     e = m_aimVel-groundSpeedCopy;
     m_ei += e*dt;
     ed = (e-m_ePrev)/dt;
+    m_ePrev=e;
     float accTmp = m_sKp*e+m_sKd*ed+m_sKi*m_ei;
     accelerationRequest = std::min(std::abs(accTmp),axLimitPositive);
     if (accTmp<0) {
@@ -997,6 +998,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     e = m_keepConstVel-groundSpeedCopy;
     m_ei += e*dt;
     ed = (e-m_ePrev)/dt;
+    m_ePrev=e;
     float accTmp = m_aKp*e+m_aKd*ed+m_aKi*m_ei;
     accelerationRequest = std::min(std::abs(accTmp),axLimitPositive);
     if (accTmp<0) {
@@ -1007,6 +1009,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     e = m_aimVel-groundSpeedCopy;
     m_ei += e*dt;
     ed = (e-m_ePrev)/dt;
+    m_ePrev=e;
     float accTmp = m_aKp*e+m_aKd*ed+m_aKi*m_ei;
     accelerationRequest = std::min(std::abs(accTmp),axLimitPositive);
     if (accTmp<0) {
