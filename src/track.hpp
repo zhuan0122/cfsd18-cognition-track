@@ -62,9 +62,14 @@ class Track {
   // steering
   bool m_moveOrigin{true};
   bool m_curveFitPath{true};
+  bool m_ignoreOnePoint{true};
+  bool m_calcDtaOnX{false};
   float m_previewTime{0.3f};
   float m_minPrevDist{1.0f};
   float m_steerRate{50.0f};
+  float m_curveLimitedSteerRate{10.0f};
+  float m_curveDetectionAngle{0.3f};
+  float m_curveExitAngleLim{0.1f};
   float m_previewTimeSlam{0.3f};
   float m_minPrevDistSlam{1.0f};
   float m_steerRateSlam{50.0f};
@@ -87,7 +92,7 @@ class Track {
   float m_axLimitPositive{5.0f};
   float m_axLimitNegative{-5.0f};
   float m_headingErrorDependency{0.7f};
-  float m_curveDetectionAngle{1.0f};
+  float m_curveDetectionAngleSlam{1.0f};
   int m_curveDetectionPoints{20};
   //....controller
   float m_aimVel{5.0f};
@@ -140,6 +145,8 @@ class Track {
   float m_prevHeadingRequest;
   bool m_slamActivated;
   bool m_paramsUpdated;
+  bool m_inLeftCurve;
+  bool m_inRightCurve;
   std::mutex m_sendMutex;
 };
 
