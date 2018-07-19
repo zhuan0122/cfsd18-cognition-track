@@ -377,6 +377,12 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
       dec.groundDeceleration(-accelerationRequest);
       m_od4.send(dec, sampleTime, m_senderStamp);
     }
+
+    if(STOP){
+      opendlv::proxy::SwitchStateReading message;
+      message.state(1);
+      m_od4BB.send(message,sampleTime, 1403);
+    }
     m_tock = std::chrono::system_clock::now();
     std::chrono::duration<double> dur = m_tock-m_tick;
     m_newClock = true;

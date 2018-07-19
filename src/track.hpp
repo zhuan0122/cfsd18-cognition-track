@@ -53,6 +53,7 @@ class Track {
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
 
   /* commandlineArguments */
+  cluon::OD4Session m_od4BB{219};
   cluon::OD4Session &m_od4;
   int m_senderStamp{221};
   // path
