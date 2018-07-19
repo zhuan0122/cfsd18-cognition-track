@@ -229,10 +229,10 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
         if (m_prevHeadingRequest<0.0f) {
           if (atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)>=m_prevHeadingRequest) {
             noPath = true;
-            std::cout<<"one point ignored, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
+            //std::cout<<"one point ignored, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
           }
           else{
-            std::cout<<"one point approved, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
+            //std::cout<<"one point approved, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
             Eigen::MatrixXf localPathTmp = localPath.row(1);
             localPath.resize(1,2);
             localPath = localPathTmp;
@@ -242,10 +242,10 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
         else if (m_prevHeadingRequest>0.0f){
           if (atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<=m_prevHeadingRequest) {
             noPath = true;
-            std::cout<<"one point ignored, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
+            //std::cout<<"one point ignored, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
           }
           else{
-            std::cout<<"one point approved, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
+            //std::cout<<"one point approved, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
             Eigen::MatrixXf localPathTmp = localPath.row(1);
             localPath.resize(1,2);
             localPath = localPathTmp;
@@ -316,18 +316,18 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
               if (angle<0.0f && initAngle<0.0f) {
                 m_inRightCurve = true;
                 m_inLeftCurve = false;
-                std::cout<<"in right curve"<<std::endl;
+                //std::cout<<"in right curve"<<std::endl;
               }
               else if (angle>0.0f && initAngle>0.0f){
                 m_inLeftCurve = true;
                 m_inRightCurve=false;
-                std::cout<<"in left curve"<<std::endl;
+                //std::cout<<"in left curve"<<std::endl;
               }
             }
             else if ((m_inLeftCurve || m_inRightCurve) && std::abs(angle)<0.1f) {
               m_inLeftCurve=false;
               m_inRightCurve=false;
-              std::cout<<"Exit curve"<<std::endl;
+              //std::cout<<"Exit curve"<<std::endl;
             }
           }
         } //else One point
@@ -359,7 +359,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
     distanceToAimPoint = std::get<1>(steering);
   }
   accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, m_velocityLimit, m_axLimitPositive, m_axLimitNegative, headingRequest, m_headingErrorDependency, m_mu, STOP, noPath);
-std::cout<<"headingRequest: "<<headingRequest<<std::endl;
+//std::cout<<"headingRequest: "<<headingRequest<<std::endl;
   { /*---SEND---*/
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
     opendlv::logic::action::AimPoint steer;
@@ -622,7 +622,8 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   float distanceToAimPoint;
   Eigen::Vector2f aimPoint(2);
   bool noPath = false;
-  if (m_moveOrigin /*&& localPath.rows()>2*/) {
+  int count = 0;
+  if (m_moveOrigin) {
     // Move localPath to front wheel axis
     Eigen::MatrixXf foo = Eigen::MatrixXf::Zero(localPath.rows(),2);
     foo.col(0).fill(m_frontToCog);
@@ -630,66 +631,86 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
 
     // Remove negative path points
     if (localPath(0,0)<0.0f && localPath.rows()>0) {
-      int count = 0;
       while (localPath(count,0)<0.0f){
-          count++;
-          if (count>localPath.rows()-1) {
-            noPath = true;
-            break;
-          }
-      }
-      if(!noPath){
-        Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
-        localPath.resize(localPath.rows()-count,2);
-        localPath = localPathTmp;
-        if (m_curveFitPath) {
-          localPathTmp = Eigen::MatrixXf::Zero(localPath.rows()+1,2);
-          localPathTmp.bottomRows(localPath.rows())=localPath;
-          localPath = localPathTmp;
-          float sumPoints = localPath.row(0).norm(); //TODO: if above is used, this is same as sumPoints=0;
-          int k=0;
-          while (10.0f >= sumPoints && k < localPath.rows()-1) {
-            sumPoints += (localPath.row(k+1)-localPath.row(k)).norm();
-            k++;
-            if (localPath(k+1,0)<localPath(k,0)) {
-              break;
-            }
-          }
-          localPath = localPath.topRows(k);
-          float xNorm = localPath(0,0); //TODO: no need to normalize if starting at 0,0
-          float yNorm = localPath(0,1);
-          localPath.col(0)=localPath.col(0).array()-xNorm;
-          localPath.col(1)=localPath.col(1).array()-yNorm;
-          Eigen::VectorXf a = curveFit(localPath);
-          for (uint32_t i = 0; i < localPath.rows(); i++) {
-            for (uint32_t j = 0; j < a.size(); j++) {
-              if (j==0) {
-                localPath(i,1) = 0.0f;
-              }
-              localPath(i,1) += a(j)*powf(localPath(i,0),j);
-            }
-          }
-          localPath.col(0)=localPath.col(0).array()+xNorm;
-          localPath.col(1)=localPath.col(1).array()+yNorm;
-          //std::cout<<"New localPath:\n "<<localPath<<std::endl;
-          std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
-          cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
-          opendlv::body::ActuatorInfo plot;
-          plot.x(a(1));
-          plot.y(a(2));
-          if (a.size()>3) {
-            plot.z(a(3));
-          }
-          else{
-            plot.z(0.0f);
-          }
-          plot.minValue(a(0));
-          plot.maxValue(localPath(0,0));
-          m_od4.send(plot, sampleTime, 11);
+        count++;
+        if (count>localPath.rows()-1) {
+          noPath = true;
+          //std::cout<<"whole path removed"<<std::endl;
+          break;
         }
       }
     }
   }
+  if(!noPath){
+    Eigen::MatrixXf localPathTmp;
+    if (count>0) {
+      localPathTmp = localPath.bottomRows(localPath.rows()-count);
+      localPath.resize(localPath.rows()-count,2);
+      localPath = localPathTmp;
+    }
+    //std::cout<<"localPath:\n "<<localPath<<std::endl;
+    if (m_curveFitPath && localPath.rows()>4) {
+      /*localPathTmp = Eigen::MatrixXf::Zero(localPath.rows()+1,2);
+      localPathTmp.bottomRows(localPath.rows())=localPath;
+      localPath = localPathTmp;*/
+      float sumPoints = localPath.row(0).norm(); //TODO: if above is used, this is same as sumPoints=0;
+      int k=0;
+      while (10.0f >= sumPoints && k < localPath.rows()-1) {
+        sumPoints += (localPath.row(k+1)-localPath.row(k)).norm();
+        k++;
+        if (k < localPath.rows()-1) {
+          if (localPath(k+1,0)<localPath(k,0)) {
+            break;
+          }
+        }
+      }
+      localPath = localPath.topRows(k);
+      /*if (localPath.row(1).norm()>m_distanceBetweenPoints) {
+        int addPoints = static_cast<int>(floorf(localPath.row(1).norm()/m_distanceBetweenPoints));
+        localPathTmp.resize(localPath.rows()+addPoints-1,2);
+        localPathTmp.bottomRows(localPath.rows()-1)=localPath.bottomRows(localPath.rows()-1);
+        for (int i = 0; i < addPoints; i++) {
+          localPathTmp.row(i)=m_distanceBetweenPoints*(localPath.row(1)/(localPath.row(1).norm()))*i;
+          std::cout<<"point added: "<< localPathTmp.row(i)<<std::endl;
+        }
+      }*/
+      //std::cout<<"localPathTmp:\n "<<localPathTmp<<std::endl;
+      float xNorm = localPath(0,0); //TODO: no need to normalize if starting at 0,0
+      float yNorm = localPath(0,1);
+      localPath.col(0)=localPath.col(0).array()-xNorm;
+      localPath.col(1)=localPath.col(1).array()-yNorm;
+      Eigen::VectorXf a = curveFit(localPath);
+      //localPath = localPathTmp;
+      for (uint32_t i = 0; i < localPath.rows(); i++) {
+        for (uint32_t j = 0; j < a.size(); j++) {
+          if (j==0) {
+            localPath(i,1) = 0.0f;
+          }
+          localPath(i,1) += a(j)*powf(localPath(i,0),j);
+        }
+      }
+      localPath.col(0)=localPath.col(0).array()+xNorm;
+      localPath.col(1)=localPath.col(1).array()+yNorm;
+      //std::cout<<"New localPath:\n "<<localPath<<std::endl;
+      std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+      cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+      opendlv::logic::perception::GroundSurfaceArea plot;
+      plot.x1(a(0));
+      plot.x2(a(1));
+      plot.x3(a(2));
+      if (a.size()>3) {
+        plot.x4(a(3));
+      }
+      else{
+        plot.x4(0.0f);
+      }
+      plot.y1(xNorm);
+      plot.y2(yNorm);
+      plot.y3(localPath(localPath.rows()-1,0)-xNorm);
+      m_od4.send(plot, sampleTime, m_senderStamp);
+    }
+  }
+
   if (!noPath) {
     // Calculate the distance between vehicle and aimpoint;
     float previewDistance = std::max(std::abs(groundSpeedCopy)*previewTime,m_minPrevDist);
@@ -764,11 +785,11 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
     }
   }
   if (m_inRightCurve && headingRequest>0.0f) {
-    std::cout<<"headingRequest limited to 0 from: "<<headingRequest<<std::endl;
+    //std::cout<<"headingRequest limited to 0 from: "<<headingRequest<<std::endl;
     headingRequest = 0.0f;
   }
   else if (m_inLeftCurve && headingRequest<0.0f) {
-    std::cout<<"headingRequest limited to 0 from: "<<headingRequest<<std::endl;
+    //std::cout<<"headingRequest limited to 0 from: "<<headingRequest<<std::endl;
     headingRequest = 0.0f;
   }
   m_prevHeadingRequest=headingRequest;
