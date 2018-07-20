@@ -68,7 +68,8 @@ class Track {
   float m_previewTime{0.3f};
   float m_minPrevDist{1.0f};
   float m_steerRate{50.0f};
-  float m_curveLimitedSteerRate{10.0f};
+  float m_curveSteerAmpLim{10.0f};
+  float m_prevReqRatio{0.0f};
   float m_curveDetectionAngle{0.3f};
   float m_curveExitAngleLim{0.1f};
   float m_previewTimeSlam{0.3f};

@@ -75,7 +75,8 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_previewTime=(commandlineArguments["previewTime"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTime"]))) : (m_previewTime);
   m_minPrevDist=(commandlineArguments["minPrevDist"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minPrevDist"]))) : (m_minPrevDist);
   m_steerRate=(commandlineArguments["steerRate"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["steerRate"]))) : (m_steerRate);
-  m_curveLimitedSteerRate=(commandlineArguments["curveLimitedSteerRate"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["curveLimitedSteerRate"]))) : (m_curveLimitedSteerRate);
+  m_curveSteerAmpLim=(commandlineArguments["curveSteerAmpLim"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["curveSteerAmpLim"]))) : (m_curveSteerAmpLim);
+  m_prevReqRatio=(commandlineArguments["prevReqRatio"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["prevReqRatio"]))) : (m_prevReqRatio);
   m_curveDetectionAngle=(commandlineArguments["curveDetectionAngle"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["curveDetectionAngle"]))) : (m_curveDetectionAngle);
   m_curveExitAngleLim=(commandlineArguments["curveExitAngleLim"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["curveExitAngleLim"]))) : (m_curveExitAngleLim);
   m_previewTimeSlam=(commandlineArguments["previewTimeSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTimeSlam"]))) : (m_previewTimeSlam);
@@ -304,33 +305,39 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
             localPathCopy = localPath;
           }
           localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
-          if (!m_slamActivated) {
-            Eigen::MatrixXf P;
-            int curveDetectionPoints = (static_cast<int>(localPath.rows())<m_curveDetectionPoints) ? (localPath.rows()-1):(m_curveDetectionPoints);
-            P=localPath.row(curveDetectionPoints);
-            float angle = atan2f(P(1),P(0));
+        } //else One point
+        if (!m_slamActivated) {
+          Eigen::MatrixXf P;
+          int curveDetectionPoints = (static_cast<int>(localPath.rows())<m_curveDetectionPoints) ? (localPath.rows()-1):(m_curveDetectionPoints);
+          P=localPath.row(curveDetectionPoints);
+          float angle = atan2f(P(1),P(0));
+          float initAngle;
+          if (!onePoint) {
             P = localPath.row(1)-localPath.row(0);
-            float initAngle = atan2f(P(1),P(0));
-            //std::cout<<"angle: "<<angle<<std::endl;
-            if (std::abs(angle)>m_curveDetectionAngle) {
-              if (angle<0.0f && initAngle<0.0f) {
-                m_inRightCurve = true;
-                m_inLeftCurve = false;
-                //std::cout<<"in right curve"<<std::endl;
-              }
-              else if (angle>0.0f && initAngle>0.0f){
-                m_inLeftCurve = true;
-                m_inRightCurve=false;
-                //std::cout<<"in left curve"<<std::endl;
-              }
+            initAngle = atan2f(P(1),P(0));
+          }
+          else{
+            initAngle = 0.0f;
+          }
+          //std::cout<<"angle: "<<angle<<std::endl;
+          if (std::abs(angle)>m_curveDetectionAngle) {
+            if (angle<0.0f && initAngle<=0.0f) {
+              m_inRightCurve = true;
+              m_inLeftCurve = false;
+              //std::cout<<"in right curve"<<std::endl;
             }
-            else if ((m_inLeftCurve || m_inRightCurve) && std::abs(angle)<0.1f) {
-              m_inLeftCurve=false;
+            else if (angle>0.0f && initAngle>=0.0f){
+              m_inLeftCurve = true;
               m_inRightCurve=false;
-              //std::cout<<"Exit curve"<<std::endl;
+              //std::cout<<"in left curve"<<std::endl;
             }
           }
-        } //else One point
+          else if ((m_inLeftCurve || m_inRightCurve) && std::abs(angle)<0.1f) {
+            m_inLeftCurve=false;
+            m_inRightCurve=false;
+            //std::cout<<"Exit curve"<<std::endl;
+          }
+        }
       }
     }
 
@@ -349,6 +356,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
       distanceToAimPoint = 3.0f; //TODO only for plot
     }
   }
+
 
   if (noPath) {
     headingRequest=m_prevHeadingRequest;
@@ -378,7 +386,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
       m_od4.send(dec, sampleTime, m_senderStamp);
     }
 
-    if(STOP){
+    if(STOP){ //TODO: Add GroundSpeedReading condition (should be zero)
       opendlv::proxy::SwitchStateReading message;
       message.state(1);
       m_od4BB.send(message,sampleTime, 1403);
@@ -656,7 +664,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
     }
     //std::cout<<"localPath:\n "<<localPath<<std::endl;
     if (m_curveFitPath && localPath.rows()>4) {
-      /*localPathTmp = Eigen::MatrixXf::Zero(localPath.rows()+1,2);
+      /*localPathTmp = Eigen::MatrixXf::Zero(localPath.rows()+1,2); //Begin path at 0,0
       localPathTmp.bottomRows(localPath.rows())=localPath;
       localPath = localPathTmp;*/
       float sumPoints = localPath.row(0).norm(); //TODO: if above is used, this is same as sumPoints=0;
@@ -671,7 +679,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         }
       }
       localPath = localPath.topRows(k);
-      /*if (localPath.row(1).norm()>m_distanceBetweenPoints) {
+      /*if (localPath.row(1).norm()>m_distanceBetweenPoints) { //add more points between car and first point (assuming first point is zero)
         int addPoints = static_cast<int>(floorf(localPath.row(1).norm()/m_distanceBetweenPoints));
         localPathTmp.resize(localPath.rows()+addPoints-1,2);
         localPathTmp.bottomRows(localPath.rows()-1)=localPath.bottomRows(localPath.rows()-1);
@@ -779,25 +787,36 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
     distanceToAimPoint = 3.0f; //TODO: distanceToAimPoint is only used for plot, everywhere.
   }
 
+
+  if (m_inRightCurve && headingRequest>-m_curveSteerAmpLim*m_PI/180.0f) {
+    //std::cout<<"headingRequest limited from: "<<headingRequest;
+    headingRequest = -m_curveSteerAmpLim*m_PI/180.0f;
+    //std::cout<<" to: "<<headingRequest<<std::endl;
+  }
+  else if (m_inLeftCurve && headingRequest<m_curveSteerAmpLim*m_PI/180.0f) {
+    //std::cout<<"headingRequest limited from: "<<headingRequest;
+    headingRequest = m_curveSteerAmpLim*m_PI/180.0f;
+    //std::cout<<" to: "<<headingRequest<<std::endl;
+  }
+
+  if (m_prevReqRatio > 0.0f) {
+    //std::cout<<"headingRequest ratio used from: "<<headingRequest;
+    headingRequest = m_prevReqRatio*m_prevHeadingRequest + (1.0f-m_prevReqRatio)*headingRequest;
+    //std::cout<<" to: "<<headingRequest<<std::endl;
+  }
+
   m_steerTockDt = std::chrono::system_clock::now();
   std::chrono::duration<float> DT = m_steerTockDt-m_steerTickDt;
   float dt = (DT.count()<1.0f) ? (DT.count()) : (0.1f); // Avoid large DT's to give high control outputs
   if (std::abs(headingRequest-m_prevHeadingRequest)/dt>(m_steerRate*m_PI/180.0)){
     if (headingRequest > m_prevHeadingRequest) { //leftTurn
-      headingRequest = dt*m_curveLimitedSteerRate*m_PI/180.0f + m_prevHeadingRequest;
+      headingRequest = dt*m_steerRate*m_PI/180.0f + m_prevHeadingRequest;
     }
     else{
-      headingRequest = -dt*m_curveLimitedSteerRate*m_PI/180.0f + m_prevHeadingRequest;
+      headingRequest = -dt*m_steerRate*m_PI/180.0f + m_prevHeadingRequest;
     }
   }
-  if (m_inRightCurve && headingRequest>0.0f) {
-    //std::cout<<"headingRequest limited to 0 from: "<<headingRequest<<std::endl;
-    headingRequest = 0.0f;
-  }
-  else if (m_inLeftCurve && headingRequest<0.0f) {
-    //std::cout<<"headingRequest limited to 0 from: "<<headingRequest<<std::endl;
-    headingRequest = 0.0f;
-  }
+
   m_prevHeadingRequest=headingRequest;
   m_steerTickDt = std::chrono::system_clock::now();
   return std::make_tuple(headingRequest,distanceToAimPoint);
