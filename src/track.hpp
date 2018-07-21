@@ -33,14 +33,14 @@ class Track {
   Track(Track const &) = delete;
   Track &operator=(Track const &) = delete;
   virtual ~Track();
-  void receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea>);
+  void receiveCombinedMessage(std::map<int,opendlv::logic::perception::GroundSurfaceArea>, cluon::data::TimeStamp);
   void nextContainer(cluon::data::Envelope &);
 
  private:
   void setUp(std::map<std::string, std::string> commandlineArguments);
   void tearDown();
 
-  void run(Eigen::MatrixXf localPath);
+  void run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime);
   bool slamParams();
   Eigen::VectorXf curveFit(Eigen::MatrixXf matrix);
   Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
@@ -53,6 +53,7 @@ class Track {
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
 
   /* commandlineArguments */
+  cluon::OD4Session m_od4BB{219};
   cluon::OD4Session &m_od4;
   int m_senderStamp{221};
   // path
@@ -62,9 +63,15 @@ class Track {
   // steering
   bool m_moveOrigin{true};
   bool m_curveFitPath{true};
+  bool m_ignoreOnePoint{true};
+  bool m_calcDtaOnX{false};
   float m_previewTime{0.3f};
   float m_minPrevDist{1.0f};
   float m_steerRate{50.0f};
+  float m_curveSteerAmpLim{10.0f};
+  float m_prevReqRatio{0.0f};
+  float m_curveDetectionAngle{0.3f};
+  float m_curveExitAngleLim{0.1f};
   float m_previewTimeSlam{0.3f};
   float m_minPrevDistSlam{1.0f};
   float m_steerRateSlam{50.0f};
@@ -87,7 +94,7 @@ class Track {
   float m_axLimitPositive{5.0f};
   float m_axLimitNegative{-5.0f};
   float m_headingErrorDependency{0.7f};
-  float m_curveDetectionAngle{1.0f};
+  float m_curveDetectionAngleSlam{1.0f};
   int m_curveDetectionPoints{20};
   //....controller
   float m_aimVel{5.0f};
@@ -140,6 +147,8 @@ class Track {
   float m_prevHeadingRequest;
   bool m_slamActivated;
   bool m_paramsUpdated;
+  bool m_inLeftCurve;
+  bool m_inRightCurve;
   std::mutex m_sendMutex;
 };
 
