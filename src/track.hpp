@@ -48,7 +48,7 @@ class Track {
   Eigen::MatrixXf orderCones(Eigen::MatrixXf localPath);
   std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
   float driverModelSharp(Eigen::MatrixXf, float);
-  float driverModelVelocity(Eigen::MatrixXf, float, float, float, float, float, float, float, bool, bool);
+  float driverModelVelocity(Eigen::MatrixXf, float, float, bool);
   std::vector<float> curvatureTriCircle(Eigen::MatrixXf, int);
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
 
@@ -149,6 +149,7 @@ class Track {
   bool m_paramsUpdated;
   bool m_inLeftCurve;
   bool m_inRightCurve;
+  bool m_STOP;
   std::mutex m_sendMutex;
 };
 
