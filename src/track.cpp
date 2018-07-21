@@ -1097,6 +1097,10 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
     }
   }
   else if (m_keepConstVel>0.0f) {
+    if (m_polyFit){ //TODO REMOVE!
+      step = 0;
+      curveRadii = curvaturePolyFit(localPath);
+    }
     e = m_keepConstVel-groundSpeedCopy;
     m_ei += e*dt;
     ed = (e-m_ePrev)/dt;
@@ -1165,11 +1169,13 @@ std::vector<float> Track::curvatureTriCircle(Eigen::MatrixXf localPath, int step
 }
 
 std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
-  int n = m_polyDeg;
+  //int n = m_polyDeg;
   int pointsPerSegment = m_pointsPerSegment;
-  int i,j,segments,N;
+  //int i,j;
+  int segments,N;
   int k=0;
   bool BREAK=false;
+  int segmentcount = 0; //TODO: only for plot
 
   uint32_t l=0;
   Eigen::VectorXf dividedPathX(localPath.rows()); // TODO: This is now maximum possible size, which in some cases is unneccesary
@@ -1216,7 +1222,7 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
   Eigen::VectorXf pathy;
   Eigen::VectorXf x;
   Eigen::VectorXf y;
-  Eigen::VectorXf a(n+1);
+  //Eigen::VectorXf a(n+1);
   int segmentBegin;
   int segmentLength = pointsPerSegment;
   for (uint32_t P=0; P<dividedPathsX.size(); P++) {
@@ -1244,70 +1250,109 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
       }
       x = pathx.segment(segmentBegin,segmentLength).array()-pathx(segmentBegin);
       y = pathy.segment(segmentBegin,segmentLength).array()-pathy(segmentBegin);
-
-      Eigen::VectorXf X(2*n+1);                        //Array that will store the values of sigma(xi),sigma(xi^2),sigma(xi^3)....sigma(xi^2n)
-      for (i=0;i<2*n+1;i++){
-        X(i)=0;
-        for (j=0;j<N;j++){
-          X(i)=X(i)+powf(x(j),i);        //consecutive positions of the array will store N,sigma(xi),sigma(xi^2),sigma(xi^3)....sigma(xi^2n)
-        }
-      }
-      //B is the Normal matrix(augmented) that will store the equations, 'a' is for value of the final coefficients
-      Eigen::MatrixXf B(n+1,n+2);
-      for (i=0;i<=n;i++){
-        for (j=0;j<=n;j++){
-          B(i,j)=X(i+j);            //Build the Normal matrix by storing the corresponding coefficients at the right positions except the last column of the matrix
-        }
-      }
-      Eigen::VectorXf Y(n+1);                    //Array to store the values of sigma(yi),sigma(xi*yi),sigma(xi^2*yi)...sigma(xi^n*yi)
-      for (i=0;i<n+1;i++){
-        Y(i)=0;
-        for (j=0;j<N;j++){
-          Y(i)=Y(i)+powf(x(j),i)*y(j);        //consecutive positions will store sigma(yi),sigma(xi*yi),sigma(xi^2*yi)...sigma(xi^n*yi)
-        }
-      }
-      for (i=0;i<=n;i++){
-        B(i,n+1)=Y(i);                //load the values of Y as the last column of B(Normal Matrix but augmented)
-      }
-      for (i=0;i<n+1;i++){                    //From now Gaussian Elimination starts(can be ignored) to solve the set of linear equations (Pivotisation)
-        for (k=i+1;k<n+1;k++){
-          if (B(i,i)<B(k,i)){
-            for (j=0;j<=n+1;j++){
-              float temp=B(i,j);
-              B(i,j)=B(k,j);
-              B(k,j)=temp;
-            }
-          }
-        }
-      }
-      for (i=0;i<n;i++){            //loop to perform the gauss elimination
-        for (k=i+1;k<n+1;k++){
-          float t=B(k,i)/B(i,i);
-          for (j=0;j<=n+1;j++){
-            B(k,j)=B(k,j)-t*B(i,j);    //make the elements below the pivot elements equal to zero or elimnate the variables
-          }
-        }
-      }
-      for (i=n;i>=0;i--){                //back-substitution
-        a(i)=B(i,n+1);                //make the variable to be calculated equal to the rhs of the last equation
-        for (j=0;j<n+1;j++){
-          if (j!=i){            //then subtract all the lhs values except the coefficient of the variable whose value is being calculated
-            a(i)=a(i)-B(i,j)*a(j);
-          }
-        }
-        a(i)=a(i)/B(i,i);            //now finally divide the rhs by the coefficient of the variable to be calculated
-      }
+      Eigen::MatrixXf matrix(x.size(),2);
+      matrix.col(0)=x;
+      matrix.col(1)=y;
+      Eigen::VectorXf a = curveFit(matrix);
 
       R.resize(x.size()); // stores curvatures
       for(uint32_t m=0; m<R.size();m++){
         R[m] = 1/std::abs(2*a(2)+6*a(3)*x(m))/powf(1+powf(a(1)+2*a(2)*x(m)+3*a(3)*powf(x(m),2),2),1.5);
-        if (R[m]<9.0f) {
+        /*if (R[m]<9.0f) {
           R[m]=9.0f;
-        }
+        }*/
       }
       curveRadii.insert(curveRadii.end(), R.begin(), R.end());
+
+
+      /*-------------TODO: remove ONLY FOR PLOT--------------*/
+      if (segmentcount==0) {
+        //std::cout<<"a0: "<<a(0)<<" a1: "<<a(1)<<" a2: "<<a(2)<<" a3: "<<a(3)<<std::endl;
+        std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+        cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+        opendlv::logic::perception::GroundSurfaceArea plot;
+        plot.x1(a(0));
+        plot.x2(a(1));
+        plot.x3(a(2));
+        if (a.size()>3) {
+          plot.x4(a(3));
+        }
+        else{
+          plot.x4(0.0f);
+        }
+        plot.y1(pathx(segmentBegin));
+        plot.y2(pathy(segmentBegin));
+        plot.y3(x(x.size()-1));
+        m_od4.send(plot, sampleTime, 11);
+      }
+      if (m_segmentizePolyfit) {
+        if (segmentcount==1) {
+          //std::cout<<"a0: "<<a(0)<<" a1: "<<a(1)<<" a2: "<<a(2)<<" a3: "<<a(3)<<std::endl;
+          std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+          cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+          opendlv::logic::perception::GroundSurfaceArea plot;
+          plot.x1(a(0));
+          plot.x2(a(1));
+          plot.x3(a(2));
+          if (a.size()>3) {
+            plot.x4(a(3));
+          }
+          else{
+            plot.x4(0.0f);
+          }
+          plot.y1(pathx(segmentBegin));
+          plot.y2(pathy(segmentBegin));
+          plot.y3(x(x.size()-1));
+          m_od4.send(plot, sampleTime, 22);
+        }
+        if (segmentcount==2) {
+          //std::cout<<"a0: "<<a(0)<<" a1: "<<a(1)<<" a2: "<<a(2)<<" a3: "<<a(3)<<std::endl;
+          std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+          cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+          opendlv::logic::perception::GroundSurfaceArea plot;
+          plot.x1(a(0));
+          plot.x2(a(1));
+          plot.x3(a(2));
+          if (a.size()>3) {
+            plot.x4(a(3));
+          }
+          else{
+            plot.x4(0.0f);
+          }
+          plot.y1(pathx(segmentBegin));
+          plot.y2(pathy(segmentBegin));
+          plot.y3(x(x.size()-1));
+          m_od4.send(plot, sampleTime, 33);
+        }
+        if (segmentcount==3) {
+          //std::cout<<"a0: "<<a(0)<<" a1: "<<a(1)<<" a2: "<<a(2)<<" a3: "<<a(3)<<std::endl;
+          std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+          cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+          opendlv::logic::perception::GroundSurfaceArea plot;
+          plot.x1(a(0));
+          plot.x2(a(1));
+          plot.x3(a(2));
+          if (a.size()>3) {
+            plot.x4(a(3));
+          }
+          else{
+            plot.x4(0.0f);
+          }
+          plot.y1(pathx(segmentBegin));
+          plot.y2(pathy(segmentBegin));
+          plot.y3(x(x.size()-1));
+          m_od4.send(plot, sampleTime, 44);
+        }
+        segmentcount++;
+      }
     } // end p-loop
   } // end P-loop
+  std::cout<<"curveRadii: ";
+  for (uint32_t i = 0; i < curveRadii.size(); i++) {
+    std::cout<<curveRadii[i]<<" ";
+  }
+  std::cout<<"\n"<<std::endl;
+  //TODO: poly fit misses to catch turns where x is decreasing, could work to switch y and x for these cases only..
 
   return curveRadii;
 } // end curvaturePolyFit
