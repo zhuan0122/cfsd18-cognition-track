@@ -151,6 +151,7 @@ class Track {
   bool m_inLeftCurve;
   bool m_inRightCurve;
   bool m_STOP;
+  std::string folderName;
   std::mutex m_sendMutex;
 };
 

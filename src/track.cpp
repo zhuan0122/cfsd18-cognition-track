@@ -21,6 +21,7 @@
 #include <cmath>
 #include "track.hpp"
 #include <chrono>
+#include <ctime>
 
 Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4),
@@ -53,6 +54,7 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_inLeftCurve{false},
   m_inRightCurve{false},
   m_STOP{false},
+  folderName{},
   m_sendMutex()
 {
  setUp(commandlineArguments);
@@ -133,6 +135,34 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
     //std::cout<<it->first<<" "<<it->second<<std::endl;
   }*/
+  std::stringstream currentDateTime;
+       time_t ttNow = time(0);
+       tm * ptmNow;
+       ptmNow = localtime(&ttNow);
+       currentDateTime << 1900 + ptmNow->tm_year << "-";
+       if (ptmNow->tm_mon < 9)
+           currentDateTime << "0" << 1 + ptmNow->tm_mon << "-";
+       else
+           currentDateTime << (1 + ptmNow->tm_mon) << "-";
+       if (ptmNow->tm_mday < 10)
+           currentDateTime << "0" << ptmNow->tm_mday << "_";
+       else
+           currentDateTime <<  ptmNow->tm_mday << "_";
+       if (ptmNow->tm_hour < 10)
+           currentDateTime << "0" << ptmNow->tm_hour;
+       else
+           currentDateTime << ptmNow->tm_hour;
+       if (ptmNow->tm_min < 10)
+           currentDateTime << "0" << ptmNow->tm_min;
+       else
+           currentDateTime << ptmNow->tm_min;
+       if (ptmNow->tm_sec < 10)
+           currentDateTime << "0" << ptmNow->tm_sec;
+       else
+           currentDateTime << ptmNow->tm_sec;
+  folderName="/opt/opendlv.data/"+currentDateTime.str()+"_velocityLogs";
+  std::string command = "mkdir "+folderName;
+  system(command.c_str());
 }
 
 void Track::tearDown()
@@ -1126,6 +1156,42 @@ m_od4.send(plot, sampleTime, 55);
     //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< " aim velocity: "<<m_aimVel<<std::endl;
     //std::cout<<"localPath: "<<localPath<<std::endl;
   }
+
+  /* --write data to file-- */
+
+
+  m_fullTime += DT.count();
+  std::ofstream accFile;
+        accFile.open(folderName+"/accelerationLog.txt",std::ios_base::app);
+        accFile<<accelerationRequest<<std::endl;
+        accFile.close();
+  std::ofstream timeFile;
+              timeFile.open(folderName+"/timeLog.txt",std::ios_base::app);
+              timeFile<<m_fullTime<<std::endl;
+              timeFile.close();
+  std::ofstream speedFile;
+              speedFile.open(folderName+"/speedLog.txt",std::ios_base::app);
+              speedFile<<groundSpeedCopy<<std::endl;
+              speedFile.close();
+  std::ofstream refSpeedFile;
+              refSpeedFile.open(folderName+"/refSpeedLog.txt",std::ios_base::app);
+              if (m_brakingState) {
+                refSpeedFile<<m_aimVel<<std::endl;
+              }
+              else if (m_rollingState) {
+                refSpeedFile<<0.0<<std::endl;
+              }
+              else if (m_keepConstVel>0 && !m_start) {
+                refSpeedFile<<m_keepConstVel<<std::endl;
+              }
+              else if (m_specCase && m_STOP) {
+                refSpeedFile<<m_aimVel<<std::endl;
+              }
+              else{
+                refSpeedFile<<m_aimVel<<std::endl;
+              }
+              refSpeedFile.close();
+
   m_tickDt = std::chrono::system_clock::now();
   return accelerationRequest;
 }
