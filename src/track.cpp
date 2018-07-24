@@ -364,10 +364,12 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
               //std::cout<<"in left curve"<<std::endl;
             }
           }
-          else if ((m_inLeftCurve || m_inRightCurve) && std::abs(angle)<0.1f) {
+          else if (m_inLeftCurve && angle<0.1f) {
             m_inLeftCurve=false;
-            m_inRightCurve=false;
             //std::cout<<"Exit curve"<<std::endl;
+          }
+          else if (m_inRightCurve && angle>0.1f) {
+            m_inRightCurve=false;
           }
         }
       }
