@@ -107,6 +107,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   // ....controller
   m_aimVel=(commandlineArguments["startAimVel"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["startAimVel"]))) : (m_aimVel);
   m_keepConstVel=(commandlineArguments["keepConstVel"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["keepConstVel"]))) : (m_keepConstVel);
+  m_keepConstVelSlam=(commandlineArguments["keepConstVelSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["keepConstVelSlam"]))) : (m_keepConstVelSlam);
   m_aKp=(commandlineArguments["aKp"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aKp"]))) : (m_aKp);
   m_aKd=(commandlineArguments["aKd"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aKd"]))) : (m_aKd);
   m_aKi=(commandlineArguments["aKi"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aKi"]))) : (m_aKi);
@@ -185,7 +186,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
 }
 bool Track::slamParams()
 {
-  m_keepConstVel = -1.0f;
+  m_keepConstVel = m_keepConstVelSlam;
   m_curveFitPath = false;
   m_curveDetectionAngle = m_curveDetectionAngleSlam;
   m_inLeftCurve = false;
@@ -214,7 +215,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
   if (localPath.rows()<=0 || (localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(1,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f && std::abs(localPath(1,1))<=0.00001f))){
     //No cone
     noPath = true;
-    std::cout<<"NO PATH RECIEVED :"<<localPath<<std::endl;
+    //std::cout<<"NO PATH RECIEVED :"<<localPath<<std::endl;
   }
   else{
     // Check for stop or one cone signal

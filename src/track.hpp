@@ -99,6 +99,7 @@ class Track {
   //....controller
   float m_aimVel{5.0f};
   float m_keepConstVel{-1.0f};
+  float m_keepConstVelSlam{-1.0f};
   float m_aKp{0.1f};
   float m_aKd{0.0f};
   float m_aKi{0.0f};
