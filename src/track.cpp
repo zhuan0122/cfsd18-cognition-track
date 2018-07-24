@@ -387,7 +387,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
       m_od4.send(dec, sampleTime, m_senderStamp);
     }
 
-    if(m_STOP){ //TODO: Add GroundSpeedReading condition (should be zero)
+    if(m_STOP && groundSpeedCopy<0.1f){ //TODO: make sure it works
       opendlv::proxy::SwitchStateReading message;
       message.state(1);
       m_od4BB.send(message,sampleTime, 1403);
