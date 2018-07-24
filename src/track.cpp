@@ -368,7 +368,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
             m_inLeftCurve=false;
             //std::cout<<"Exit curve"<<std::endl;
           }
-          else if (m_inRightCurve && angle>0.1f) {
+          else if (m_inRightCurve && angle>-0.1f) {
             m_inRightCurve=false;
           }
         }
