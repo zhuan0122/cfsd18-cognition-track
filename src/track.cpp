@@ -941,7 +941,7 @@ m_od4.send(plot, sampleTime, 55);
     if(critDiff<=m_critDiff){ //braking is critical
       if (((groundSpeedCopy-speedProfile(idx))>m_diffToBrakeVel) || m_brakingState) {
         if (!m_brakingState) {
-          std::cout<<"ENTER BRAKING STATE: "<<std::endl;
+          //std::cout<<"ENTER BRAKING STATE: "<<std::endl;
         }
         m_aimVel = speedProfile(idx);
         m_timeToCritVel = critTb;
@@ -953,7 +953,7 @@ m_od4.send(plot, sampleTime, 55);
         m_apexRadius=100000.0f;
       }
       else{ //Enter rolling state instead of braking
-        std::cout<<"ENTER ROLLING STATE (from braking) "<<std::endl;
+        //std::cout<<"ENTER ROLLING STATE (from braking) "<<std::endl;
         m_brakingState = true;
         m_rollingState = true;
         m_accelerationState = false;
@@ -962,7 +962,7 @@ m_od4.send(plot, sampleTime, 55);
     /*ACCELERATION STATE*/
     if (!m_brakingState){
       if (!m_accelerationState) {
-        std::cout<<"ENTER ACCELERATION STATE: "<<std::endl;
+        //std::cout<<"ENTER ACCELERATION STATE: "<<std::endl;
         m_accClock = 0.0f;
         if (aIdx<0) {
           m_aimVel = (speedProfile(0)*(1.0f-headingError*m_headingErrorDependency)>groundSpeedCopy) ? (speedProfile(0)*(1.0f-headingError*m_headingErrorDependency)) : (groundSpeedCopy);
@@ -973,7 +973,7 @@ m_od4.send(plot, sampleTime, 55);
       if (aIdx==0) {
         if ((m_minRadius-m_apexRadius)>1.0f) {
           if (m_rollingState) {
-            std::cout<<" Apex passed -> diff: "<<m_minRadius-m_apexRadius<< std::endl;
+            //std::cout<<" Apex passed -> diff: "<<m_minRadius-m_apexRadius<< std::endl;
           }
           m_aimVel = (speedProfile(0)*(1.0f-headingError*m_headingErrorDependency)>groundSpeedCopy) ? (speedProfile(0)*(1.0f-headingError*m_headingErrorDependency)) : (groundSpeedCopy);
           m_apexRadius=0.0f;
@@ -982,8 +982,8 @@ m_od4.send(plot, sampleTime, 55);
           m_accelerationState = true;
         }
         else{
-          std::cout<<" Before apex -> diff: "<<m_minRadius-m_apexRadius<<std::endl;
-std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
+          //std::cout<<" Before apex -> diff: "<<m_minRadius-m_apexRadius<<std::endl;
+          //std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
           m_brakingState = false;
           m_rollingState = true;
           m_accelerationState = false;
@@ -998,7 +998,7 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
     /*ROLLING STATE*/
     if (!m_brakingState && !m_accelerationState) {
       if (!m_rollingState) {
-        std::cout<<"ENTER ROLLING STATE "<<std::endl;
+        //std::cout<<"ENTER ROLLING STATE "<<std::endl;
       }
       m_brakingState = false;
       m_rollingState = true;
@@ -1012,7 +1012,7 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
       m_ePrev=e;
       if (groundSpeedCopy>m_aimVel) {
         float accTmp = m_bKp*e+m_bKd*ed+m_bKi*m_ei;
-        std::cout<<"braking accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" groundspeed: "<<groundSpeedCopy<<" kpe: "<<m_bKp*e<<" kiei: "<<m_bKi*m_ei<<" kded: "<<m_bKd*ed<<std::endl;
+        //std::cout<<"braking accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" groundspeed: "<<groundSpeedCopy<<" kpe: "<<m_bKp*e<<" kiei: "<<m_bKi*m_ei<<" kded: "<<m_bKd*ed<<std::endl;
         accelerationRequest = std::max(accTmp,m_axLimitNegative);
       }
       else{
@@ -1024,7 +1024,7 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
     if (m_rollingState) {
       if (groundSpeedCopy>1.0f) {
         accelerationRequest = 0.0f;
-        std::cout<<"rolling: "<<accelerationRequest<<std::endl;
+        //std::cout<<"rolling: "<<accelerationRequest<<std::endl;
       }else{
         m_accelerationState = true;
         m_rollingState = false;
@@ -1051,7 +1051,7 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
       else {
         accelerationRequest = 0.0f;
       }
-      std::cout<<"accelerating accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" groundspeed: "<<groundSpeedCopy<<" accelerationRequest: "<<accelerationRequest<<" kpe: "<<m_aKp*e<<" kiei: "<<m_aKi*m_ei<<" kded: "<<m_aKd*ed<<std::endl;
+      //std::cout<<"accelerating accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" groundspeed: "<<groundSpeedCopy<<" accelerationRequest: "<<accelerationRequest<<" kpe: "<<m_aKp*e<<" kiei: "<<m_aKi*m_ei<<" kded: "<<m_aKd*ed<<std::endl;
     }
   } //end if(!m_STOP && (localPath.rows() > 2 ....)
   /*SET SPECIAL CASES*/
@@ -1075,7 +1075,7 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
     ed = (e-m_ePrev)/dt;
     m_ePrev=e;
     float accTmp = m_bKp*e+m_bKd*ed+m_bKi*m_ei;
-    std::cout<<"BRAKING TO m_STOP accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" kpe: "<<m_bKp*e<<" kiei: "<<m_bKi*m_ei<<" kded: "<<m_bKd*ed<<std::endl;
+    //std::cout<<"BRAKING TO m_STOP accTmp: "<<accTmp<< " aim velocity: "<<m_aimVel<<" kpe: "<<m_bKp*e<<" kiei: "<<m_bKi*m_ei<<" kded: "<<m_bKd*ed<<std::endl;
     if (accTmp>0.0f) {
       accTmp = 0.0f;
     }
@@ -1091,16 +1091,16 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
     if (accTmp<0) {
       accelerationRequest=-accelerationRequest;
     }
-    std::cout<<"START, acc = "<<accelerationRequest<< " m_aimVel: "<<m_aimVel<<std::endl;
+    //std::cout<<"START, acc = "<<accelerationRequest<< " m_aimVel: "<<m_aimVel<<std::endl;
     if (groundSpeedCopy > m_aimVel) {
       m_start = false;
     }
   }
   else if (m_keepConstVel>0.0f) {
-    if (m_polyFit){ //TODO REMOVE!
+    /*if (m_polyFit){
       step = 0;
       curveRadii = curvaturePolyFit(localPath);
-    }
+    }*/
     e = m_keepConstVel-groundSpeedCopy;
     m_ei += e*dt;
     ed = (e-m_ePrev)/dt;
@@ -1110,7 +1110,7 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
     if (accTmp<0) {
       accelerationRequest=-accelerationRequest;
     }
-     std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< "aim velocity: "<<m_keepConstVel<<std::endl;
+    //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< "aim velocity: "<<m_keepConstVel<<std::endl;
   }
   else if (noPath || (localPath.rows()<3)) {
     e = m_aimVel-groundSpeedCopy;
@@ -1122,8 +1122,8 @@ std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
     if (accTmp<0) {
       accelerationRequest=-accelerationRequest;
     }
-    std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< " aim velocity: "<<m_keepConstVel<<std::endl;
-    std::cout<<"localPath: "<<localPath<<std::endl;
+    //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< " aim velocity: "<<m_aimVel<<std::endl;
+    //std::cout<<"localPath: "<<localPath<<std::endl;
   }
   m_tickDt = std::chrono::system_clock::now();
   return accelerationRequest;
@@ -1347,11 +1347,11 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
       }
     } // end p-loop
   } // end P-loop
-  std::cout<<"curveRadii: ";
+  /*std::cout<<"curveRadii: ";
   for (uint32_t i = 0; i < curveRadii.size(); i++) {
     std::cout<<curveRadii[i]<<" ";
   }
-  std::cout<<"\n"<<std::endl;
+  std::cout<<"\n"<<std::endl;*/
   //TODO: poly fit misses to catch turns where x is decreasing, could work to switch y and x for these cases only..
 
   return curveRadii;
