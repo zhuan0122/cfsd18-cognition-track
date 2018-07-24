@@ -1353,7 +1353,7 @@ std::tuple<bool, Eigen::MatrixXf>  Track::pathMemory(Eigen::MatrixXf localPath)
     if (m_noPath) {
       if (m_savedPath.row(m_savedPath.rows()-1).norm()>2.0f) {
         localPath=m_savedPath;
-        std::cout<<"no path -> localPath=savedPath"
+        std::cout<<"no path -> localPath=savedPath"<<std::endl;
         m_noPath=false;
         modified = true;
       }
