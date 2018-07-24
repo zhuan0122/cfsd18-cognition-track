@@ -69,7 +69,13 @@ int32_t main(int32_t argc, char **argv) {
         }
       }
     };
+    auto dataEnvelope{[&surfer = track](cluon::data::Envelope &&envelope)
+      {
+          surfer.nextContainer(envelope);
+      }
+    };
 
+    od4.dataTrigger(opendlv::sim::Frame::ID(),dataEnvelope);
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
     od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
     od4.dataTrigger(opendlv::proxy::AccelerationReading::ID(),speedEnvelope);

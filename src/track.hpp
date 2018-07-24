@@ -51,6 +51,9 @@ class Track {
   float driverModelVelocity(Eigen::MatrixXf, float, float, bool);
   std::vector<float> curvatureTriCircle(Eigen::MatrixXf, int);
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
+  std::tuple<bool, Eigen::MatrixXf> pathMemory(Eigen::MatrixXf localPath);
+  void curveDetectionNoSlam(Eigen::MatrixXf localPath);
+  Eigen::MatrixXf pathProcessing(Eigen::MatrixXf localPath);
 
   /* commandlineArguments */
   cluon::OD4Session m_od4BB{219};
@@ -68,6 +71,7 @@ class Track {
   float m_previewTime{0.3f};
   float m_minPrevDist{1.0f};
   float m_steerRate{50.0f};
+  float m_goodPathLimit{5.0f};
   float m_curveSteerAmpLim{10.0f};
   float m_prevReqRatio{0.0f};
   float m_curveDetectionAngle{0.3f};
@@ -150,6 +154,13 @@ class Track {
   bool m_inLeftCurve;
   bool m_inRightCurve;
   bool m_STOP;
+  Eigen::MatrixXf m_savedPath;
+  Eigen::MatrixXf m_globalPath;
+  Eigen::Vector2f m_location;
+  std::mutex m_locationMutex;
+  float m_heading;
+  bool m_noPath;
+  bool m_onePoint;
   std::mutex m_sendMutex;
 };
 
