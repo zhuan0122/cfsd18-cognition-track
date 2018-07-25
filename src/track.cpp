@@ -1507,11 +1507,11 @@ void Track::curveDetectionNoSlam(Eigen::MatrixXf localPath)
       //std::cout<<"in left curve"<<std::endl;
     }
   }
-  else if (m_inLeftCurve && angle<0.1f) {
+  else if (m_inLeftCurve && angle<m_curveExitAngleLim) {
     m_inLeftCurve=false;
     //std::cout<<"Exit curve"<<std::endl;
   }
-  else if (m_inRightCurve && angle>-0.1f) {
+  else if (m_inRightCurve && angle>-m_curveExitAngleLim) {
     m_inRightCurve=false;
   }
 }
