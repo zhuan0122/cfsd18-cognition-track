@@ -21,6 +21,7 @@
 #include <cmath>
 #include "track.hpp"
 #include <chrono>
+#include <ctime>
 
 Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4Session &od4) :
   m_od4(od4),
@@ -60,6 +61,7 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_heading{},
   m_noPath{},
   m_onePoint{},
+  folderName{},
   m_sendMutex()
 {
  setUp(commandlineArguments);
@@ -115,6 +117,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   // ....controller
   m_aimVel=(commandlineArguments["startAimVel"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["startAimVel"]))) : (m_aimVel);
   m_keepConstVel=(commandlineArguments["keepConstVel"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["keepConstVel"]))) : (m_keepConstVel);
+  m_keepConstVelSlam=(commandlineArguments["keepConstVelSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["keepConstVelSlam"]))) : (m_keepConstVelSlam);
   m_aKp=(commandlineArguments["aKp"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aKp"]))) : (m_aKp);
   m_aKd=(commandlineArguments["aKd"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aKd"]))) : (m_aKd);
   m_aKi=(commandlineArguments["aKi"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aKi"]))) : (m_aKi);
@@ -140,6 +143,34 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
     //std::cout<<it->first<<" "<<it->second<<std::endl;
   }*/
+  std::stringstream currentDateTime;
+       time_t ttNow = time(0);
+       tm * ptmNow;
+       ptmNow = localtime(&ttNow);
+       currentDateTime << 1900 + ptmNow->tm_year << "-";
+       if (ptmNow->tm_mon < 9)
+           currentDateTime << "0" << 1 + ptmNow->tm_mon << "-";
+       else
+           currentDateTime << (1 + ptmNow->tm_mon) << "-";
+       if (ptmNow->tm_mday < 10)
+           currentDateTime << "0" << ptmNow->tm_mday << "_";
+       else
+           currentDateTime <<  ptmNow->tm_mday << "_";
+       if (ptmNow->tm_hour < 10)
+           currentDateTime << "0" << ptmNow->tm_hour;
+       else
+           currentDateTime << ptmNow->tm_hour;
+       if (ptmNow->tm_min < 10)
+           currentDateTime << "0" << ptmNow->tm_min;
+       else
+           currentDateTime << ptmNow->tm_min;
+       if (ptmNow->tm_sec < 10)
+           currentDateTime << "0" << ptmNow->tm_sec;
+       else
+           currentDateTime << ptmNow->tm_sec;
+  folderName="/opt/opendlv.data/"+currentDateTime.str()+"_velocityLogs";
+  std::string command = "mkdir "+folderName;
+  system(command.c_str());
 }
 
 void Track::tearDown()
@@ -205,7 +236,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
 }
 bool Track::slamParams()
 {
-  m_keepConstVel = -1.0f;
+  m_keepConstVel = m_keepConstVelSlam;
   m_curveFitPath = false;
   m_curveDetectionAngle = m_curveDetectionAngleSlam;
   m_inLeftCurve = false;
@@ -329,7 +360,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
       m_od4.send(dec, sampleTime, m_senderStamp);
     }
 
-    if(m_STOP){ //TODO: Add GroundSpeedReading condition (should be zero)
+    if(m_STOP && groundSpeedCopy<0.1f){ //TODO: make sure it works
       opendlv::proxy::SwitchStateReading message;
       message.state(1);
       m_od4BB.send(message,sampleTime, 1403);
@@ -924,8 +955,8 @@ m_od4.send(plot, sampleTime, 55);
           m_accelerationState = true;
         }
         else{
-  //        std::cout<<" Before apex -> diff: "<<m_minRadius-m_apexRadius<<std::endl;
-//std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
+          //std::cout<<" Before apex -> diff: "<<m_minRadius-m_apexRadius<<std::endl;
+          //std::cout<<"ENTER ROLLING STATE (from acceleration) "<<std::endl;
           m_brakingState = false;
           m_rollingState = true;
           m_accelerationState = false;
@@ -1048,7 +1079,7 @@ m_od4.send(plot, sampleTime, 55);
     if (accTmp<0) {
       accelerationRequest=-accelerationRequest;
     }
-     //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< "aim velocity: "<<m_keepConstVel<<std::endl;
+    //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< "aim velocity: "<<m_keepConstVel<<std::endl;
   }
   else if (noPath || (localPath.rows()<3)) {
     e = m_aimVel-groundSpeedCopy;
@@ -1060,9 +1091,45 @@ m_od4.send(plot, sampleTime, 55);
     if (accTmp<0) {
       accelerationRequest=-accelerationRequest;
     }
-    //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< " aim velocity: "<<m_keepConstVel<<std::endl;
+    //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< " aim velocity: "<<m_aimVel<<std::endl;
     //std::cout<<"localPath: "<<localPath<<std::endl;
   }
+
+  /* --write data to file-- */
+
+
+  m_fullTime += DT.count();
+  std::ofstream accFile;
+        accFile.open(folderName+"/accelerationLog.txt",std::ios_base::app);
+        accFile<<accelerationRequest<<std::endl;
+        accFile.close();
+  std::ofstream timeFile;
+              timeFile.open(folderName+"/timeLog.txt",std::ios_base::app);
+              timeFile<<m_fullTime<<std::endl;
+              timeFile.close();
+  std::ofstream speedFile;
+              speedFile.open(folderName+"/speedLog.txt",std::ios_base::app);
+              speedFile<<groundSpeedCopy<<std::endl;
+              speedFile.close();
+  std::ofstream refSpeedFile;
+              refSpeedFile.open(folderName+"/refSpeedLog.txt",std::ios_base::app);
+              if (m_brakingState) {
+                refSpeedFile<<m_aimVel<<std::endl;
+              }
+              else if (m_rollingState) {
+                refSpeedFile<<0.0<<std::endl;
+              }
+              else if (m_keepConstVel>0 && !m_start) {
+                refSpeedFile<<m_keepConstVel<<std::endl;
+              }
+              else if (m_specCase && m_STOP) {
+                refSpeedFile<<m_aimVel<<std::endl;
+              }
+              else{
+                refSpeedFile<<m_aimVel<<std::endl;
+              }
+              refSpeedFile.close();
+
   m_tickDt = std::chrono::system_clock::now();
   return accelerationRequest;
 }
@@ -1285,11 +1352,11 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
       }
     } // end p-loop
   } // end P-loop
-  std::cout<<"curveRadii: ";
+  /*std::cout<<"curveRadii: ";
   for (uint32_t i = 0; i < curveRadii.size(); i++) {
     std::cout<<curveRadii[i]<<" ";
   }
-  std::cout<<"\n"<<std::endl;
+  std::cout<<"\n"<<std::endl;*/
   //TODO: poly fit misses to catch turns where x is decreasing, could work to switch y and x for these cases only..
 
   return curveRadii;

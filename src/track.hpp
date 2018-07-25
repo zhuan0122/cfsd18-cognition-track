@@ -103,6 +103,7 @@ class Track {
   //....controller
   float m_aimVel{5.0f};
   float m_keepConstVel{-1.0f};
+  float m_keepConstVelSlam{-1.0f};
   float m_aKp{0.1f};
   float m_aKd{0.0f};
   float m_aKi{0.0f};
@@ -161,6 +162,7 @@ class Track {
   float m_heading;
   bool m_noPath;
   bool m_onePoint;
+  std::string folderName;
   std::mutex m_sendMutex;
 };
 
