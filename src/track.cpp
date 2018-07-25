@@ -291,7 +291,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
       headingRequest = std::get<0>(steering);
       distanceToAimPoint = std::get<1>(steering);
     }
-    accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, headingRequest, m_noPath);
+    accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, headingRequest);
   }
   else{
     //std::cout<<"memoryModifiedPath: "<<memoryModifiedPath<<std::endl;
@@ -796,7 +796,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   return std::make_tuple(headingRequest,distanceToAimPoint);
 }
 
-float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCopy, float headingRequest, bool noPath){
+float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCopy, float headingRequest){
   float accelerationRequest = 0.0f;
   Eigen::VectorXf speedProfile;
   std::vector<float> curveRadii;
@@ -1081,7 +1081,7 @@ m_od4.send(plot, sampleTime, 55);
     }
     //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< "aim velocity: "<<m_keepConstVel<<std::endl;
   }
-  else if (noPath || (localPath.rows()<3)) {
+  else if (m_noPath || (localPath.rows()<3)) {
     e = m_aimVel-groundSpeedCopy;
     m_ei += e*dt;
     ed = (e-m_ePrev)/dt;
