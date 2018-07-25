@@ -298,7 +298,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
     auto steering = Track::driverModelSteering(memoryModifiedPath, groundSpeedCopy, m_previewTime);
     headingRequest = std::get<0>(steering);
     distanceToAimPoint = std::get<1>(steering);
-    accelerationRequest = Track::driverModelVelocity(memoryModifiedPath, groundSpeedCopy, headingRequest, false);
+    accelerationRequest = Track::driverModelVelocity(memoryModifiedPath, groundSpeedCopy, headingRequest);
   }
 
 
@@ -1414,8 +1414,8 @@ std::tuple<bool, Eigen::MatrixXf>  Track::pathMemory(Eigen::MatrixXf localPath)
     }
 
 /*-----------Combine current and saved path------------*/
-    float currentLength=0.0f;
-    float savedLength=0.0f;
+    //float currentLength=0.0f;
+    //float savedLength=0.0f;
     bool modified = false;
     if (m_noPath) {
       if (m_savedPath.row(m_savedPath.rows()-1).norm()>2.0f) {
@@ -1425,10 +1425,31 @@ std::tuple<bool, Eigen::MatrixXf>  Track::pathMemory(Eigen::MatrixXf localPath)
         modified = true;
       }
     }
-    /*else if (m_onePoint) {
-    }*/
+    else if (m_onePoint) {
+      if (localPath(0,0)<m_savedPath(m_savedPath.rows()-1,0)) {
+        float d=std::numeric_limits<float>::infinity();
+        float D;
+        int idx=0;
+        for (uint32_t i = 0; i < m_savedPath.rows(); i++) {
+          D = (m_savedPath.row(i)-localPath).norm();
+          if (D<d) {
+            d=D;
+            idx=i;
+          }
+        }
+        if (d>0.1f) {
+          std::cout<<"d="<<d<<" m_savedPath moved with (x)"<<(localPath(0)-m_savedPath(idx,0))<<" (y) "<<(localPath(1)-m_savedPath(idx,1));
+          m_savedPath.col(0)=m_savedPath.col(0).array()+(localPath(0)-m_savedPath(idx,0));
+          m_savedPath.col(1)=m_savedPath.col(1).array()+(localPath(1)-m_savedPath(idx,1));
+          std::cout<< "to -> "<<m_savedPath<<std::endl;
+        }
+        localPath=m_savedPath;
+        modified=true;
+        std::cout<<"one point path -> localPath=savedPath"<<std::endl;
+      }
+    }
     else{
-      currentLength=localPath.row(0).norm();
+      /*currentLength=localPath.row(0).norm();
       for (int i = 0; i < localPath.rows()-1; i++) {
         currentLength+=(localPath.row(i+1)-localPath.row(i)).norm();
       }
@@ -1438,14 +1459,15 @@ std::tuple<bool, Eigen::MatrixXf>  Track::pathMemory(Eigen::MatrixXf localPath)
           savedLength+=(m_savedPath.row(i+1)-m_savedPath.row(i)).norm();
         }
       }
+
       if (currentLength<savedLength-1.0f) {
         std::cout<<"current path: "<<localPath<<std::endl;
         localPath=m_savedPath;
         std::cout<<"localPath = m_savedPath "<<std::endl;
         modified = true;
-      }
+      } */
       //If saved path begin sooner than current path
-      else if (localPath(0,0) > m_savedPath(0,0)) {
+      if (localPath(0,0) > m_savedPath(0,0)) {
         //add saved path to beginning of localPath
         Eigen::MatrixXf addPath=Eigen::ArrayXXf::Zero(m_savedPath.rows(),2);
         int i=0;
@@ -1462,10 +1484,8 @@ std::tuple<bool, Eigen::MatrixXf>  Track::pathMemory(Eigen::MatrixXf localPath)
           localPathTmp.topRows(i)=addPath.topRows(i);
           localPathTmp.bottomRows(localPath.rows())=localPath;
           localPath = Track::placeEquidistantPoints(localPathTmp,false,-1,m_distanceBetweenPoints);
-          if (localPath.rows()>10) {
-            modified = true;
-            std::cout<<"modified localPath: "<<localPath<<std::endl;
-          }
+          modified = true;
+          std::cout<<"modified localPath: "<<localPath<<std::endl;
         }
       }
     }
