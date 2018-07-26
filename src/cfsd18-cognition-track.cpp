@@ -40,9 +40,12 @@ int32_t main(int32_t argc, char **argv) {
     uint32_t const speedId=(commandlineArguments["speedId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId"])) : (0);
     uint32_t const slamId=(commandlineArguments["slamId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"])) : (0);
     uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(221);
+    uint16_t const cidWheelSpeed{(commandlineArguments["cidWheelSpeed"].size() != 0) ? static_cast<uint16_t>(std::stoi(commandlineArguments["cidWheelSpeed"])) : (uint16_t) 219};
     // Interface to a running OpenDaVINCI session
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
+    cluon::OD4Session od4_WS{cidWheelSpeed};
+
     Track track(commandlineArguments, od4);
     int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(50);
     int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(10);
@@ -70,6 +73,7 @@ int32_t main(int32_t argc, char **argv) {
       }
     };
 
+    od4_WS.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
     od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
     od4.dataTrigger(opendlv::proxy::AccelerationReading::ID(),speedEnvelope);
