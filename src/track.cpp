@@ -1036,6 +1036,10 @@ m_od4.send(plot, sampleTime, 55);
 
 
   m_fullTime += DT.count();
+  std::ofstream eiFile;
+        eiFile.open(folderName+"/eiLog.txt",std::ios_base::app);
+        eiFile<<m_ei<<std::endl;
+        eiFile.close();
   std::ofstream accFile;
         accFile.open(folderName+"/accelerationLog.txt",std::ios_base::app);
         accFile<<accelerationRequest<<std::endl;
