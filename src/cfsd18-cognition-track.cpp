@@ -69,13 +69,22 @@ int32_t main(int32_t argc, char **argv) {
         }
       }
     };
-    auto dataEnvelope{[&surfer = track](cluon::data::Envelope &&envelope)
+    auto geolocationEnvelope{[&surfer = track, senderStamp = speedId](cluon::data::Envelope &&envelope)
+      {
+        if(envelope.senderStamp() == senderStamp){
+          surfer.nextContainer(envelope);
+        }
+      }
+    };
+    auto frameEnvelope{[&surfer = track](cluon::data::Envelope &&envelope)
       {
           surfer.nextContainer(envelope);
       }
     };
 
-    od4.dataTrigger(opendlv::sim::Frame::ID(),dataEnvelope);
+
+    od4.dataTrigger(opendlv::sim::Frame::ID(),frameEnvelope);
+    od4.dataTrigger(opendlv::logic::sensation::Geolocation::ID(),geolocationEnvelope);
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
     od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
     od4.dataTrigger(opendlv::proxy::AccelerationReading::ID(),speedEnvelope);

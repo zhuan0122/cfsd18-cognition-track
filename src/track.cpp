@@ -216,8 +216,20 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     auto lateralAcceleration = cluon::extractMessage<opendlv::proxy::AccelerationReading>(std::move(a_container));
     m_lateralAcceleration = lateralAcceleration.accelerationY();
   }
-  else if (a_container.dataType() == opendlv::sim::Frame::ID())
+  else if (a_container.dataType() == opendlv::logic::sensation::Geolocation::ID())
   {
+    auto location = cluon::extractMessage<opendlv::logic::sensation::Geolocation>(std::move(a_container));
+    float x = static_cast<float>(location.longitude());
+    float y = static_cast<float>(location.latitude());
+    float yaw = location.heading();
+    {
+      std::unique_lock<std::mutex> lockLocation(m_locationMutex);
+      m_location << x,y;
+      m_heading = yaw;
+    }
+  }
+  else if (a_container.dataType() == opendlv::sim::Frame::ID())
+  { //TODO remove. Only for simulation.
     auto frame = cluon::extractMessage<opendlv::sim::Frame>(std::move(a_container));
     float x = frame.x();
     float y = frame.y();
@@ -228,6 +240,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
       m_heading = yaw;
     }
   }
+
   else if (!m_paramsUpdated) {
     if (a_container.dataType() == opendlv::logic::perception::ObjectDirection::ID()) {
       m_slamActivated = true;
