@@ -208,6 +208,9 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
     auto lateralAcceleration = cluon::extractMessage<opendlv::proxy::AccelerationReading>(std::move(a_container));
     m_lateralAcceleration = lateralAcceleration.accelerationY();
   }
+  else if (a_container.dataType() == opendlv::logic::perception::GroundSurfaceProperty::ID()) {
+    m_STOP = true;
+  }
   else if (!m_paramsUpdated) {
     if (a_container.dataType() == opendlv::logic::perception::ObjectDirection::ID()) {
       m_slamActivated = true;
@@ -248,15 +251,8 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
     //std::cout<<"NO PATH RECIEVED :"<<localPath<<std::endl;
   }
   else{
-    // Check for stop or one cone signal
-    if ((std::abs(localPath(localPath.rows()-1,0))<=0.00001f && std::abs(localPath(localPath.rows()-2,0))<=0.00001f && std::abs(localPath(localPath.rows()-1,1))<=0.00001f && std::abs(localPath(localPath.rows()-2,1))<=0.00001f)){
-      //Stop
-      Eigen::MatrixXf localPathTmp = localPath.topRows(localPath.rows()-2);
-      localPath.resize(localPathTmp.rows(),2);
-      localPath = localPathTmp;
-      m_STOP = true;
-    }
-    else if(localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f)){
+    // Check for one cone signal
+    if(localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f)){
       //One cone -> one point
       if (m_ignoreOnePoint) {
         if (m_prevHeadingRequest<0.0f) {

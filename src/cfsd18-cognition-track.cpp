@@ -44,40 +44,35 @@ int32_t main(int32_t argc, char **argv) {
     // Interface to a running OpenDaVINCI session
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
-    cluon::OD4Session od4_WS{cidWheelSpeed};
+    cluon::OD4Session od4WS{cidWheelSpeed};
 
     Track track(commandlineArguments, od4);
     int gatheringTimeMs = (commandlineArguments.count("gatheringTimeMs")>0)?(std::stoi(commandlineArguments["gatheringTimeMs"])):(50);
     int separationTimeMs = (commandlineArguments.count("separationTimeMs")>0)?(std::stoi(commandlineArguments["separationTimeMs"])):(10);
     Collector collector(track,gatheringTimeMs, separationTimeMs, 1);
 
-    auto surfaceEnvelope{[senderStamp = surfaceId,&collector](cluon::data::Envelope &&envelope)
+    auto surfaceEnvelope{[surfaceId, &collector](cluon::data::Envelope &&envelope)
       {
-        if(envelope.senderStamp() == senderStamp){
+        if(envelope.senderStamp() == surfaceId){
           collector.CollectSurfaces(envelope);
         }
       }
     };
-    auto speedEnvelope{[&surfer = track, senderStamp = speedId](cluon::data::Envelope &&envelope)
+    auto nextEnvelope{[&surfer = track, speedId, slamId, surfaceId](cluon::data::Envelope &&envelope)
       {
-        if(envelope.senderStamp() == senderStamp){
-          surfer.nextContainer(envelope);
-        }
-      }
-    };
-    auto slamEnvelope{[&surfer = track, senderStamp = slamId](cluon::data::Envelope &&envelope)
-      {
-        if(envelope.senderStamp() == senderStamp){
+        if(envelope.senderStamp() == speedId || envelope.senderStamp() == slamId || envelope.senderStamp() == surfaceId){
           surfer.nextContainer(envelope);
         }
       }
     };
 
-    od4_WS.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
+
+    od4WS.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),nextEnvelope);
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
-    od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),speedEnvelope);
-    od4.dataTrigger(opendlv::proxy::AccelerationReading::ID(),speedEnvelope);
-    od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),slamEnvelope);
+    od4.dataTrigger(opendlv::logic::perception::GroundSurfaceProperty::ID(),nextEnvelope);
+    od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),nextEnvelope);
+    od4.dataTrigger(opendlv::proxy::AccelerationReading::ID(),nextEnvelope);
+    od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),nextEnvelope);
 
 
     // Just sleep as this microservice is data driven.
