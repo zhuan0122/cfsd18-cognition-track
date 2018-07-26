@@ -46,11 +46,13 @@ class Track {
   Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
   Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
   Eigen::MatrixXf orderCones(Eigen::MatrixXf localPath);
-  std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float, float);
+  std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float);
   float driverModelSharp(Eigen::MatrixXf, float);
-  float driverModelVelocity(Eigen::MatrixXf, float, float, bool);
+  float driverModelVelocity(Eigen::MatrixXf, float, float);
   std::vector<float> curvatureTriCircle(Eigen::MatrixXf, int);
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
+  void curveDetectionNoSlam(Eigen::MatrixXf localPath);
+  Eigen::MatrixXf pathProcessing(Eigen::MatrixXf localPath);
 
   /* commandlineArguments */
   cluon::OD4Session m_od4BB{219};
@@ -151,6 +153,8 @@ class Track {
   bool m_inLeftCurve;
   bool m_inRightCurve;
   bool m_STOP;
+  bool m_noPath;
+  bool m_onePoint;
   std::string folderName;
   std::mutex m_sendMutex;
 };

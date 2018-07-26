@@ -54,6 +54,8 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_inLeftCurve{false},
   m_inRightCurve{false},
   m_STOP{false},
+  m_noPath{},
+  m_onePoint{},
   folderName{},
   m_sendMutex()
 {
@@ -233,9 +235,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
   if (m_slamActivated && !m_paramsUpdated) {
     m_paramsUpdated = slamParams();
   }
-  bool noPath = false;
-  bool onePoint = false;
-  int count = 0;
+
   float headingRequest;
   float distanceToAimPoint;
   float accelerationRequest;
@@ -244,159 +244,36 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
     std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
     groundSpeedCopy = m_groundSpeed;
   }
-  //check for no cone signal
-  if (localPath.rows()<=0 || (localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(1,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f && std::abs(localPath(1,1))<=0.00001f))){
-    //No cone
-    noPath = true;
-    //std::cout<<"NO PATH RECIEVED :"<<localPath<<std::endl;
-  }
-  else{
-    // Check for one cone signal
-    if(localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f)){
-      //One cone -> one point
-      if (m_ignoreOnePoint) {
-        if (m_prevHeadingRequest<0.0f) {
-          if (atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)>=m_prevHeadingRequest) {
-            noPath = true;
-            //std::cout<<"one point ignored, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
-          }
-          else{
-            //std::cout<<"one point approved, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
-            Eigen::MatrixXf localPathTmp = localPath.row(1);
-            localPath.resize(1,2);
-            localPath = localPathTmp;
-            onePoint = true;
-          }
-        }
-        else if (m_prevHeadingRequest>0.0f){
-          if (atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<=m_prevHeadingRequest) {
-            noPath = true;
-            //std::cout<<"one point ignored, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
-          }
-          else{
-            //std::cout<<"one point approved, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
-            Eigen::MatrixXf localPathTmp = localPath.row(1);
-            localPath.resize(1,2);
-            localPath = localPathTmp;
-            onePoint=true;
-          }
-        }
-      }
-      else{
-        Eigen::MatrixXf localPathTmp = localPath.row(1);
-        localPath.resize(1,2);
-        localPath = localPathTmp;
-        onePoint=true;
-      }
-    }
-    else if(localPath.rows()==2 && (std::abs(localPath(1,0))<=0.00001f && std::abs(localPath(1,1))<=0.00001f)){
-      //Two cones -> one point
-      Eigen::MatrixXf localPathTmp = localPath.row(0);
-      localPath.resize(1,2);
-      localPath = localPathTmp;
-      onePoint = true;
-      //std::cout<<"One Point Signal recieved"<<std::endl;
-    }
-    if (!onePoint && !noPath) {
-      // Order path
-      localPath = orderCones(localPath);
-      // Remove negative path points
-      if (localPath(0,0)<0.0f) {
-        while (localPath(count,0)<0.0f){
-          count++;
-          if (count>localPath.rows()-2) {
-            onePoint = true;
-          }
-          if (count>localPath.rows()-1) {
-            noPath = true;
-            onePoint = false;
-            break;
-          }
-        }
-      }
-      if (!noPath) {
-        if (count>0) {
-          Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
-          localPath.resize(localPath.rows()-count,2);
-          localPath = localPathTmp;
-        }
-        if (!onePoint) {
-          //Place equidistant points
-          Eigen::MatrixXf localPathCopy;
-          if (m_traceBack){ //TODO remove function if never used
-            Eigen::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
-            localPathCopy.resize(localPath.rows()+1,2);
-            localPathCopy.row(0) = firstPoint;
-            localPathCopy.block(1,0,localPath.rows(),2) = localPath;
-            localPath.resize(localPathCopy.rows(),2);
-          } else{
-            localPathCopy = localPath;
-          }
-          localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
-        } //else One point
-        if (!m_slamActivated) {
-          Eigen::MatrixXf P;
-          int curveDetectionPoints = (static_cast<int>(localPath.rows())<m_curveDetectionPoints) ? (localPath.rows()-1):(m_curveDetectionPoints);
-          P=localPath.row(curveDetectionPoints);
-          float angle = atan2f(P(1),P(0));
-          float initAngle;
-          if (!onePoint) {
-            P = localPath.row(1)-localPath.row(0);
-            initAngle = atan2f(P(1),P(0));
-          }
-          else{
-            initAngle = 0.0f;
-          }
-          //std::cout<<"angle: "<<angle<<std::endl;
-          if (std::abs(angle)>m_curveDetectionAngle) {
-            if (angle<0.0f && initAngle<=0.0f) {
-              m_inRightCurve = true;
-              m_inLeftCurve = false;
-              //std::cout<<"in right curve"<<std::endl;
-            }
-            else if (angle>0.0f && initAngle>=0.0f){
-              m_inLeftCurve = true;
-              m_inRightCurve=false;
-              //std::cout<<"in left curve"<<std::endl;
-            }
-          }
-          else if (m_inLeftCurve && angle<0.1f) {
-            m_inLeftCurve=false;
-            //std::cout<<"Exit curve"<<std::endl;
-          }
-          else if (m_inRightCurve && angle>-0.1f) {
-            m_inRightCurve=false;
-          }
-        }
-      }
-    }
 
-    if (m_sharp && !onePoint && !noPath) {
-      float previewDistance = std::abs(groundSpeedCopy)*m_previewTime;
-      float pathLength=localPath.row(0).norm();
-      if(localPath.rows()>1){
-        for (int i = 0; i < localPath.rows()-1; i++) {
-          pathLength+=(localPath.row(i+1)-localPath.row(i)).norm();
-        }
-      }
-      if (previewDistance>pathLength) {
-        previewDistance = pathLength;
-      }
-      headingRequest = Track::driverModelSharp(localPath, previewDistance);
-      distanceToAimPoint = 3.0f; //TODO only for plot
-    }
+  localPath = pathProcessing(localPath);
+  if (!m_slamActivated && !m_noPath) {
+    curveDetectionNoSlam(localPath);
   }
 
-
-  if (noPath) {
+  if (m_noPath) {
     headingRequest=m_prevHeadingRequest;
     distanceToAimPoint=1.0f;
-  } else {
-    auto steering = Track::driverModelSteering(localPath, groundSpeedCopy, m_previewTime);
-    headingRequest = std::get<0>(steering);
-    distanceToAimPoint = std::get<1>(steering);
   }
-  accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, headingRequest, noPath);
+  else if (m_sharp && !m_onePoint) {
+    float previewDistance = std::abs(groundSpeedCopy)*m_previewTime;
+    float pathLength=localPath.row(0).norm();
+    if(localPath.rows()>1){
+      for (int i = 0; i < localPath.rows()-1; i++) {
+        pathLength+=(localPath.row(i+1)-localPath.row(i)).norm();
+      }
+    }
+    if (previewDistance>pathLength) {
+      previewDistance = pathLength;
+    }
+    headingRequest = Track::driverModelSharp(localPath, previewDistance);
+    distanceToAimPoint = 3.0f; //TODO only for plot
+  }
+  else{
+  auto steering = Track::driverModelSteering(localPath, groundSpeedCopy);
+  headingRequest = std::get<0>(steering);
+  distanceToAimPoint = std::get<1>(steering);
+  }
+  accelerationRequest = Track::driverModelVelocity(localPath, groundSpeedCopy, headingRequest);
 //std::cout<<"headingRequest: "<<headingRequest<<std::endl;
   { /*---SEND---*/
     std::unique_lock<std::mutex> lockSend(m_sendMutex);
@@ -661,7 +538,7 @@ float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
 }
 
 
-std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, float groundSpeedCopy, float previewTime) {
+std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, float groundSpeedCopy) {
   float headingRequest;
   float distanceToAimPoint;
   Eigen::Vector2f aimPoint(2);
@@ -757,7 +634,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
 
   if (!noPath) {
     // Calculate the distance between vehicle and aimpoint;
-    float previewDistance = std::max(std::abs(groundSpeedCopy)*previewTime,m_minPrevDist);
+    float previewDistance = std::max(std::abs(groundSpeedCopy)*m_previewTime,m_minPrevDist);
     float sumPoints;
     // Sum the distance between all path points until passing previewDistance
     // or reaching end of path
@@ -852,7 +729,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
   return std::make_tuple(headingRequest,distanceToAimPoint);
 }
 
-float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCopy, float headingRequest, bool noPath){
+float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCopy, float headingRequest){
   float accelerationRequest = 0.0f;
   Eigen::VectorXf speedProfile;
   std::vector<float> curveRadii;
@@ -1141,7 +1018,7 @@ m_od4.send(plot, sampleTime, 55);
     }
     //std::cout<<"KEEPING CONSTANT VELOCITY, acc = "<<accelerationRequest<< "aim velocity: "<<m_keepConstVel<<std::endl;
   }
-  else if (noPath || (localPath.rows()<3)) {
+  else if (m_noPath || (localPath.rows()<3)) {
     e = m_aimVel-groundSpeedCopy;
     m_ei += e*dt;
     ed = (e-m_ePrev)/dt;
@@ -1421,3 +1298,139 @@ std::vector<float> Track::curvaturePolyFit(Eigen::MatrixXf localPath){
 
   return curveRadii;
 } // end curvaturePolyFit
+
+void Track::curveDetectionNoSlam(Eigen::MatrixXf localPath)
+{
+  Eigen::MatrixXf P;
+  int curveDetectionPoints = (static_cast<int>(localPath.rows())<m_curveDetectionPoints) ? (localPath.rows()-1):(m_curveDetectionPoints);
+  P=localPath.row(curveDetectionPoints);
+  float angle = atan2f(P(1),P(0));
+  float initAngle;
+  if (!m_onePoint) {
+    P = localPath.row(1)-localPath.row(0);
+    initAngle = atan2f(P(1),P(0));
+  }
+  else{
+    initAngle = 0.0f;
+  }
+  //std::cout<<"angle: "<<angle<<std::endl;
+  if (std::abs(angle)>m_curveDetectionAngle) {
+    if (angle<0.0f && initAngle<=0.0f) {
+      m_inRightCurve = true;
+      m_inLeftCurve = false;
+      //std::cout<<"in right curve"<<std::endl;
+    }
+    else if (angle>0.0f && initAngle>=0.0f){
+      m_inLeftCurve = true;
+      m_inRightCurve=false;
+      //std::cout<<"in left curve"<<std::endl;
+    }
+  }
+  else if (m_inLeftCurve && angle<m_curveExitAngleLim) {
+    m_inLeftCurve=false;
+    //std::cout<<"Exit curve"<<std::endl;
+  }
+  else if (m_inRightCurve && angle>-m_curveExitAngleLim) {
+    m_inRightCurve=false;
+  }
+}
+
+Eigen::MatrixXf Track::pathProcessing(Eigen::MatrixXf localPath)
+{
+  m_noPath=false;
+  m_onePoint=false;
+  //check for no cone signal
+  if (localPath.rows()<=0 || (localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(1,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f && std::abs(localPath(1,1))<=0.00001f))){
+    //No cone
+    m_noPath = true;
+  }
+  else{
+    // Check for one cone signal
+    if(localPath.rows()==2 && (std::abs(localPath(0,0))<=0.00001f && std::abs(localPath(0,1))<=0.00001f)){
+      //One cone -> one point
+      if (m_ignoreOnePoint) {
+        if (m_prevHeadingRequest<0.0f) {
+          if (atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)>=m_prevHeadingRequest) {
+            m_noPath = true;
+            //std::cout<<"one point ignored, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
+          }
+          else{
+            //std::cout<<"one point approved, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
+            Eigen::MatrixXf localPathTmp = localPath.row(1);
+            localPath.resize(1,2);
+            localPath = localPathTmp;
+            m_onePoint = true;
+          }
+        }
+        else if (m_prevHeadingRequest>0.0f){
+          if (atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<=m_prevHeadingRequest) {
+            m_noPath = true;
+            //std::cout<<"one point ignored, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
+          }
+          else{
+            //std::cout<<"one point approved, onepoint heading: "<<atan2f(localPath(1,1),localPath(1,0)-m_frontToCog)<<" prev heading: "<<m_prevHeadingRequest<<std::endl;
+            Eigen::MatrixXf localPathTmp = localPath.row(1);
+            localPath.resize(1,2);
+            localPath = localPathTmp;
+            m_onePoint=true;
+          }
+        }
+      }
+      else{
+        Eigen::MatrixXf localPathTmp = localPath.row(1);
+        localPath.resize(1,2);
+        localPath = localPathTmp;
+        m_onePoint=true;
+      }
+    }
+    else if(localPath.rows()==2 && (std::abs(localPath(1,0))<=0.00001f && std::abs(localPath(1,1))<=0.00001f)){
+      //Two cones -> one point
+      Eigen::MatrixXf localPathTmp = localPath.row(0);
+      localPath.resize(1,2);
+      localPath = localPathTmp;
+      m_onePoint = true;
+      //std::cout<<"One Point Signal recieved"<<std::endl;
+    }
+    if (!m_onePoint && !m_noPath) {
+      // Order path
+      localPath = orderCones(localPath);
+      // Remove negative path points
+      int count = 0;
+      if (localPath(0,0)<0.0f) {
+        while (localPath(count,0)<0.0f){
+          count++;
+          if (count>localPath.rows()-2) {
+            m_onePoint = true;
+          }
+          if (count>localPath.rows()-1) {
+            m_noPath = true;
+            m_onePoint = false;
+            break;
+          }
+        }
+      }
+      if (!m_noPath) {
+        if (count>0) {
+          Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
+          localPath.resize(localPath.rows()-count,2);
+          localPath = localPathTmp;
+        }
+        if (!m_onePoint) {
+          //Place equidistant points
+          Eigen::MatrixXf localPathCopy;
+          if (m_traceBack){ //TODO remove function if never used
+            Eigen::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2));
+            localPathCopy.resize(localPath.rows()+1,2);
+            localPathCopy.row(0) = firstPoint;
+            localPathCopy.block(1,0,localPath.rows(),2) = localPath;
+            localPath.resize(localPathCopy.rows(),2);
+          } else{
+            localPathCopy = localPath;
+          }
+          localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
+        } //else One point
+      }
+    }
+  }
+  return localPath;
+}
