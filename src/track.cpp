@@ -993,7 +993,12 @@ m_od4.send(plot, sampleTime, 55);
   }
   else if (m_start) {
     e = m_aimVel-groundSpeedCopy;
-    m_ei += e*dt;
+    if (groundSpeedCopy<=0.01f) {
+      m_ei = 0.0f
+    }
+    else {
+      m_ei += e*dt;
+    }
     ed = (e-m_ePrev)/dt;
     m_ePrev=e;
     float accTmp = m_sKp*e+m_sKd*ed+m_sKi*m_ei;
