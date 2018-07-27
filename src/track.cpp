@@ -755,7 +755,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
 
   float e = 0.0f;
   float ed = 0.0f;
-  if ((!m_STOP) && (localPath.rows() > 2) && (m_keepConstVel<0) && (!m_start)){
+  if ((!m_STOP) && (localPath.rows() > 2) && (m_keepConstVel<0.0f) && (!m_start)){
     m_specCase = false;
     // Caluclate curvature of path
       if (m_polyFit){
@@ -965,12 +965,16 @@ m_od4.send(plot, sampleTime, 55);
     m_brakingState = false;
     m_rollingState = false;
     m_accelerationState = false;
+    if (m_STOP) {
+      m_aimVel=0.0f;
+    }
+    else if (m_STOP && m_keepConstVel>0.0f) {
+      m_specCase = false;
+      m_keepConstVel = -1.0f;
+    }
     if (!m_specCase) {
       m_ei=0.0f;
       m_ePrev=0.0f;
-      if (m_STOP) {
-        m_aimVel=0.0f;
-      }
       m_specCase=true;
     }
   }
