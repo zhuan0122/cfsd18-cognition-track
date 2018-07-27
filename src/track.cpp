@@ -994,7 +994,7 @@ m_od4.send(plot, sampleTime, 55);
   else if (m_start) {
     e = m_aimVel-groundSpeedCopy;
     if (groundSpeedCopy<=0.01f) {
-      m_ei = 0.0f
+      m_ei = 0.0f;
     }
     else {
       m_ei += e*dt;
