@@ -1372,7 +1372,12 @@ Eigen::MatrixXf Track::pathProcessing(Eigen::MatrixXf localPath)
             Eigen::MatrixXf localPathTmp = localPath.row(1);
             localPath.resize(1,2);
             localPath = localPathTmp;
-            m_onePoint = true;
+            if (localPath(0,0)>0) {
+              m_onePoint=true;
+            }
+            else{
+              m_noPath=true;
+            }
           }
         }
         else if (m_prevHeadingRequest>0.0f){
@@ -1385,7 +1390,12 @@ Eigen::MatrixXf Track::pathProcessing(Eigen::MatrixXf localPath)
             Eigen::MatrixXf localPathTmp = localPath.row(1);
             localPath.resize(1,2);
             localPath = localPathTmp;
-            m_onePoint=true;
+            if (localPath(0,0)>0) {
+              m_onePoint=true;
+            }
+            else{
+              m_noPath=true;
+            }
           }
         }
       }
@@ -1393,7 +1403,12 @@ Eigen::MatrixXf Track::pathProcessing(Eigen::MatrixXf localPath)
         Eigen::MatrixXf localPathTmp = localPath.row(1);
         localPath.resize(1,2);
         localPath = localPathTmp;
-        m_onePoint=true;
+        if (localPath(0,0)>0) {
+          m_onePoint=true;
+        }
+        else{
+          m_noPath=true;
+        }
       }
     }
     else if(localPath.rows()==2 && (std::abs(localPath(1,0))<=0.00001f && std::abs(localPath(1,1))<=0.00001f)){
@@ -1401,7 +1416,12 @@ Eigen::MatrixXf Track::pathProcessing(Eigen::MatrixXf localPath)
       Eigen::MatrixXf localPathTmp = localPath.row(0);
       localPath.resize(1,2);
       localPath = localPathTmp;
-      m_onePoint = true;
+      if (localPath(0,0)>0) {
+        m_onePoint=true;
+      }
+      else{
+        m_noPath=true;
+      }
       //std::cout<<"One Point Signal recieved"<<std::endl;
     }
     if (!m_onePoint && !m_noPath) {
