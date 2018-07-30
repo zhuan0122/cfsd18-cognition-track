@@ -992,30 +992,29 @@ m_od4.send(plot, sampleTime, 55);
     accelerationRequest = std::max(accTmp,m_axLimitNegative);
   }
   else if (m_start) {
-    e = m_aimVel-groundSpeedCopy;
-    if (groundSpeedCopy<=0.01f) {
-      m_ei = 0.0f;
-    }
-    else {
-      m_ei += e*dt;
-    }
-    ed = (e-m_ePrev)/dt;
-    m_ePrev=e;
-    float accTmp = m_sKp*e+m_sKd*ed+m_sKi*m_ei;
-    accelerationRequest = std::min(std::abs(accTmp),m_axLimitPositive);
-    if (accTmp<0) {
-      accelerationRequest=-accelerationRequest;
-    }
-    //std::cout<<"START, acc = "<<accelerationRequest<< " m_aimVel: "<<m_aimVel<<std::endl;
     if (groundSpeedCopy > m_aimVel) {
       m_start = false;
+      accelerationRequest=0.0f;
+    }
+    else{
+      e = m_aimVel-groundSpeedCopy;
+      if (groundSpeedCopy<=0.01f) {
+        m_ei = 0.0f;
+      }
+      else {
+        m_ei += e*dt;
+      }
+      ed = (e-m_ePrev)/dt;
+      m_ePrev=e;
+      float accTmp = m_sKp*e+m_sKd*ed+m_sKi*m_ei;
+      accelerationRequest = std::min(std::abs(accTmp),m_axLimitPositive);
+      if (accTmp<0) {
+        accelerationRequest=-accelerationRequest;
+      }
+      //std::cout<<"START, acc = "<<accelerationRequest<< " m_aimVel: "<<m_aimVel<<std::endl;
     }
   }
   else if (m_keepConstVel>0.0f) {
-    /*if (m_polyFit){
-      step = 0;
-      curveRadii = curvaturePolyFit(localPath);
-    }*/
     e = m_keepConstVel-groundSpeedCopy;
     m_ei += e*dt;
     ed = (e-m_ePrev)/dt;
