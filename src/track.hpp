@@ -43,7 +43,6 @@ class Track {
   void run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime);
   bool slamParams();
   Eigen::VectorXf curveFit(Eigen::MatrixXf matrix);
-  Eigen::RowVector2f traceBackToClosestPoint(Eigen::RowVector2f, Eigen::RowVector2f, Eigen::RowVector2f);
   Eigen::MatrixXf placeEquidistantPoints(Eigen::MatrixXf, bool, int, float);
   Eigen::MatrixXf orderCones(Eigen::MatrixXf localPath);
   std::tuple<float, float> driverModelSteering(Eigen::MatrixXf, float);
@@ -53,29 +52,31 @@ class Track {
   std::vector<float> curvaturePolyFit(Eigen::MatrixXf);
   void curveDetectionNoSlam(Eigen::MatrixXf localPath);
   Eigen::MatrixXf pathProcessing(Eigen::MatrixXf localPath);
+  float bPID(float dt, float groundSpeed);
+  float aPID(float dt, float groundSpeed);
+  void resetPID();
 
   /* commandlineArguments */
   cluon::OD4Session m_od4BB{219};
   cluon::OD4Session &m_od4;
   int m_senderStamp{221};
   // path
-  double m_receiveTimeLimit{0.01};
   float m_distanceBetweenPoints{0.5f};
-  bool m_traceBack{false};
   // steering
   bool m_moveOrigin{true};
-  bool m_curveFitPath{true};
+  bool m_orderPath{true};
+  bool m_curveFitPath{false};
   bool m_ignoreOnePoint{true};
   bool m_calcDtaOnX{false};
-  float m_previewTime{0.3f};
-  float m_minPrevDist{1.0f};
+  float m_previewTime{1.0f};
+  float m_minPrevDist{2.0f};
   float m_steerRate{50.0f};
-  float m_curveSteerAmpLim{10.0f};
+  float m_curveSteerAmpLim{0.0f};
   float m_prevReqRatio{0.0f};
   float m_curveDetectionAngle{0.3f};
   float m_curveExitAngleLim{0.1f};
-  float m_previewTimeSlam{0.3f};
-  float m_minPrevDistSlam{1.0f};
+  float m_previewTimeSlam{0.5f};
+  float m_minPrevDistSlam{2.0f};
   float m_steerRateSlam{50.0f};
   //sharp
   bool m_sharp{false};
@@ -85,22 +86,23 @@ class Track {
   float m_C{m_K1};
   float m_c{1.0f};
   // velocity control
-  float m_diffToBrakeVel{0.5f};
-  float m_critDiff{0.1f};
-  float m_critDiff2{0.1f};
-  float m_accFreq{10};
-  float m_axSpeedProfile{-1.0f};
-  bool m_useAyReading{true};
+  float m_diffToBrakeVel{0.0f};
+  float m_critDiff{0.5f};
+  float m_critDiff2{1.0f};
+  float m_accFreq{1};
+  float m_ayLimit{3.74f};
   float m_velocityLimit{5.0f};
-  float m_mu{0.9f};
   float m_axLimitPositive{5.0f};
   float m_axLimitNegative{-5.0f};
-  float m_headingErrorDependency{0.7f};
+  float m_headingErrorDependency{0.5f};
   float m_curveDetectionAngleSlam{1.0f};
-  int m_curveDetectionPoints{20};
+  int m_curveDetectionPoints{10};
+  int m_curveDetectionPointsSlam{15};
+  float m_maxPathLengthLocal{13};
   //....controller
   float m_aimVel{5.0f};
   float m_keepConstVel{-1.0f};
+  float m_localVel{3.0f};
   float m_keepConstVelSlam{-1.0f};
   float m_aKp{0.1f};
   float m_aKd{0.0f};
@@ -108,9 +110,6 @@ class Track {
   float m_bKp{0.1f};
   float m_bKd{0.0f};
   float m_bKi{0.0f};
-  float m_sKp{0.1f};
-  float m_sKd{0.0f};
-  float m_sKi{0.0f};
   // curvature estimation
   bool m_polyFit{false};
   int m_step{5};
@@ -118,7 +117,7 @@ class Track {
   int m_pointsPerSegment{15};
   bool m_segmentizePolyfit{false};
   // vehicle specific
-  float m_wheelAngleLimit{20.0f};
+  float m_wheelAngleLimit{30.0f};
   float m_wheelBase{1.53f};
   float m_frontToCog{0.765f};
 
@@ -126,15 +125,10 @@ class Track {
   float const m_PI = 3.14159265f;
   float m_groundSpeed;
   std::mutex m_groundSpeedMutex;
-  float m_lateralAcceleration;
-  std::mutex m_lateralAccelerationMutex;
-  std::chrono::time_point<std::chrono::system_clock> m_tick;
-  std::chrono::time_point<std::chrono::system_clock> m_tock;
   std::chrono::time_point<std::chrono::system_clock> m_tickDt;
   std::chrono::time_point<std::chrono::system_clock> m_tockDt;
   std::chrono::time_point<std::chrono::system_clock> m_steerTickDt;
   std::chrono::time_point<std::chrono::system_clock> m_steerTockDt;
-  bool m_newClock;
   bool m_brakingState;
   bool m_accelerationState;
   bool m_rollingState;
@@ -146,7 +140,6 @@ class Track {
   float m_ei;
   float m_ePrev;
   float m_fullTime;
-  bool m_start;
   float m_prevHeadingRequest;
   bool m_slamActivated;
   bool m_paramsUpdated;
@@ -155,6 +148,12 @@ class Track {
   bool m_STOP;
   bool m_noPath;
   bool m_onePoint;
+  float m_brakeInXSeconds;
+  float m_critVel;
+  bool m_aimVelSet;
+  bool m_prevState;
+  float m_tv;
+  uint16_t m_case;
   std::string folderName;
   std::mutex m_sendMutex;
 };

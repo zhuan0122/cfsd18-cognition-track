@@ -71,7 +71,6 @@ int32_t main(int32_t argc, char **argv) {
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceArea::ID(),surfaceEnvelope);
     od4.dataTrigger(opendlv::logic::perception::GroundSurfaceProperty::ID(),nextEnvelope);
     od4.dataTrigger(opendlv::proxy::GroundSpeedReading::ID(),nextEnvelope);
-    od4.dataTrigger(opendlv::proxy::AccelerationReading::ID(),nextEnvelope);
     od4.dataTrigger(opendlv::logic::perception::ObjectDirection::ID(),nextEnvelope);
 
 
