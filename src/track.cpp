@@ -103,6 +103,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_velocityLimit=(commandlineArguments["velocityLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["velocityLimit"]))) : (m_velocityLimit);
   m_axLimitPositive=(commandlineArguments["axLimitPositive"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["axLimitPositive"]))) : (m_axLimitPositive);
   m_axLimitNegative=(commandlineArguments["axLimitNegative"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["axLimitNegative"]))) : (m_axLimitNegative);
+  m_alwaysHeadingErrorDependent=(commandlineArguments["alwaysHeadingErrorDependent"].size() != 0) ? (std::stoi(commandlineArguments["alwaysHeadingErrorDependent"])==1) : (m_alwaysHeadingErrorDependent);
   m_headingErrorDependency=(commandlineArguments["headingErrorDependency"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["headingErrorDependency"]))) : (m_headingErrorDependency);
   m_curveDetectionAngleSlam=(commandlineArguments["curveDetectionAngleSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["curveDetectionAngleSlam"]))) : (m_curveDetectionAngleSlam);
   m_curveDetectionPoints=(commandlineArguments["curveDetectionPoints"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["curveDetectionPoints"]))) : (m_curveDetectionPoints);
@@ -847,7 +848,12 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
           //std::cout<<"Restricted by heading"<<std::endl;
         }
         else{
-          m_aimVel = averageSpeed;//m_velocityLimit;//speedProfile(0);
+          if (m_alwaysHeadingErrorDependent) {
+            m_aimVel = (averageSpeed*(1.0f-headingError*m_headingErrorDependency)>groundSpeedCopy) ? (averageSpeed*(1.0f-headingError*m_headingErrorDependency)) : (groundSpeedCopy);
+          }
+          else{
+            m_aimVel = averageSpeed;//m_velocityLimit;//speedProfile(0);
+          }
         }
 
         if (critDiff<m_critDiff2) {
@@ -889,7 +895,12 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
           //std::cout<<"Restricted by heading"<<std::endl;
         }
         else{
-          m_aimVel = averageSpeed;//m_velocityLimit;//speedProfile(0);
+          if (m_alwaysHeadingErrorDependent) {
+            m_aimVel = (averageSpeed*(1.0f-headingError*m_headingErrorDependency)>groundSpeedCopy) ? (averageSpeed*(1.0f-headingError*m_headingErrorDependency)) : (groundSpeedCopy);
+          }
+          else{
+            m_aimVel = averageSpeed;//m_velocityLimit;//speedProfile(0);
+          }
         }
         if (critDiff<m_critDiff2) {
           m_aimVel=groundSpeedCopy;

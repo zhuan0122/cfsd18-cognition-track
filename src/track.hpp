@@ -95,6 +95,7 @@ class Track {
   float m_axLimitPositive{5.0f};
   float m_axLimitNegative{-5.0f};
   float m_headingErrorDependency{0.5f};
+  bool m_alwaysHeadingErrorDependent{false};
   float m_curveDetectionAngleSlam{1.0f};
   int m_curveDetectionPoints{10};
   int m_curveDetectionPointsSlam{15};
