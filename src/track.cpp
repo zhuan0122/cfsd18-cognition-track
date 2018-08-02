@@ -56,12 +56,16 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_prevState{false},
   m_tv{0.0f},
   m_case{0},
+  m_preview{},
+  m_minPreview{},
   folderName{},
   m_sendMutex()
 {
  setUp(commandlineArguments);
  m_tickDt = std::chrono::system_clock::now();
  m_steerTickDt = std::chrono::system_clock::now();
+ m_preview=m_previewTime;
+ m_minPreview=m_minPrevDist;
 }
 Track::~Track()
 {
@@ -79,6 +83,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_calcDtaOnX=(commandlineArguments["calcDtaOnX"].size() != 0) ? (std::stoi(commandlineArguments["calcDtaOnX"])==1) : (m_calcDtaOnX);
   m_previewTime=(commandlineArguments["previewTime"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTime"]))) : (m_previewTime);
   m_minPrevDist=(commandlineArguments["minPrevDist"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minPrevDist"]))) : (m_minPrevDist);
+  m_constPrevDist=(commandlineArguments["constPrevDist"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["constPrevDist"]))) : (m_constPrevDist);
   m_steerRate=(commandlineArguments["steerRate"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["steerRate"]))) : (m_steerRate);
   m_curveSteerAmpLim=(commandlineArguments["curveSteerAmpLim"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["curveSteerAmpLim"]))) : (m_curveSteerAmpLim);
   m_prevReqRatio=(commandlineArguments["prevReqRatio"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["prevReqRatio"]))) : (m_prevReqRatio);
@@ -243,7 +248,7 @@ void Track::run(Eigen::MatrixXf localPath, cluon::data::TimeStamp sampleTime){
     distanceToAimPoint=1.0f;
   }
   else if (m_sharp && !m_onePoint) {
-    float previewDistance = std::abs(groundSpeedCopy)*m_previewTime;
+    float previewDistance = std::abs(groundSpeedCopy)*m_preview;
     float pathLength=localPath.row(0).norm();
     if(localPath.rows()>1){
       for (int i = 0; i < localPath.rows()-1; i++) {
@@ -606,7 +611,13 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
 
   if (!noPath) {
     // Calculate the distance between vehicle and aimpoint;
-    float previewDistance = std::max(std::abs(groundSpeedCopy)*m_previewTime,m_minPrevDist);
+    float previewDistance=0.0f;
+    if (m_constPrevDist>=0) {
+      previewDistance=m_constPrevDist;
+    }
+    else{
+      previewDistance = std::max(std::abs(groundSpeedCopy)*m_preview,m_minPreview);
+    }
     float sumPoints;
     // Sum the distance between all path points until passing previewDistance
     // or reaching end of path
@@ -725,9 +736,11 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
   float dt = (DT.count()<1.0f) ? (DT.count()) : (0.1f); // Avoid large DT's to give high control outputs
 
   if ((!m_STOP) && slam && m_slamActivated && (m_keepConstVel<0.0f)){
+    m_preview=m_previewTimeSlam;
+    m_minPreview = m_minPrevDistSlam;
     m_specCase = false;
-    m_aimVelSet=false;
-    m_case=0;
+    m_aimVelSet = false;
+    m_case = 0;
     // Caluclate curvature of path
       if (m_polyFit){
         step = 0;
@@ -755,7 +768,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
 
     Eigen::MatrixXf P;
     int aIdx=-1;
-    int curveDetectionPoints = (static_cast<int>(curveRadii.size())<m_curveDetectionPoints) ? (curveRadii.size()-1):(m_curveDetectionPoints);
+    int curveDetectionPoints = (static_cast<int>(curveRadii.size())<m_curveDetectionPointsSlam) ? (curveRadii.size()-1):(m_curveDetectionPointsSlam);
     for (int k = step; k < localPath.rows()-step-curveDetectionPoints; k++) {
       P=localPath.row(k+curveDetectionPoints)-localPath.row(k);
       float angle = atan2f(P(1),P(0));
@@ -932,6 +945,8 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       m_aimVel=m_keepConstVel;
       m_brakingState=false;
       m_accelerationState=true;
+      m_preview=m_previewTime;
+      m_minPreview=m_minPrevDist;
       //std::cout<<"K"<<std::endl;
       if (!m_specCase) {
         resetPID();
@@ -1014,6 +1029,8 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
             m_aimVel=m_localVel;
           }
           m_case=6;
+          m_preview=m_previewTime;
+          m_minPreview=m_minPrevDist;
           m_accelerationState=false;
           //std::cout<<"C 6"<<std::endl;
         }

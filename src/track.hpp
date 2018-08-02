@@ -70,6 +70,7 @@ class Track {
   bool m_calcDtaOnX{false};
   float m_previewTime{1.0f};
   float m_minPrevDist{2.0f};
+  float m_constPrevDist{-1.0f};
   float m_steerRate{50.0f};
   float m_curveSteerAmpLim{0.0f};
   float m_prevReqRatio{0.0f};
@@ -155,6 +156,8 @@ class Track {
   bool m_prevState;
   float m_tv;
   uint16_t m_case;
+  float m_preview;
+  float m_minPreview;
   std::string folderName;
   std::mutex m_sendMutex;
 };
