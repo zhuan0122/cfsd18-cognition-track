@@ -37,7 +37,8 @@ int32_t main(int32_t argc, char **argv) {
     retCode = 1;
   } else {
     uint32_t const surfaceId=(commandlineArguments["surfaceId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["surfaceId"])) : (0);
-    uint32_t const speedId=(commandlineArguments["speedId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId"])) : (0);
+    uint32_t const speedId1=(commandlineArguments["speedId1"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId1"])) : (0);
+    uint32_t const speedId2=(commandlineArguments["speedId2"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["speedId2"])) : (0);
     uint32_t const slamId=(commandlineArguments["slamId"].size() != 0) ? static_cast<uint32_t>(std::stoi(commandlineArguments["slamId"])) : (0);
     uint32_t id = (commandlineArguments.count("id")>0)?(static_cast<uint32_t>(std::stoi(commandlineArguments["id"]))):(221);
     uint16_t const cidWheelSpeed{(commandlineArguments["cidWheelSpeed"].size() != 0) ? static_cast<uint16_t>(std::stoi(commandlineArguments["cidWheelSpeed"])) : (uint16_t) 219};
@@ -58,9 +59,9 @@ int32_t main(int32_t argc, char **argv) {
         }
       }
     };
-    auto nextEnvelope{[&surfer = track, speedId, slamId, surfaceId](cluon::data::Envelope &&envelope)
+    auto nextEnvelope{[&surfer = track, speedId1, speedId2, slamId, surfaceId](cluon::data::Envelope &&envelope)
       {
-        if(envelope.senderStamp() == speedId || envelope.senderStamp() == slamId || envelope.senderStamp() == surfaceId){
+        if(envelope.senderStamp() == speedId1 || envelope.senderStamp() == speedId2 || envelope.senderStamp() == slamId || envelope.senderStamp() == surfaceId){
           surfer.nextContainer(envelope);
         }
       }

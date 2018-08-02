@@ -60,6 +60,8 @@ class Track {
   cluon::OD4Session m_od4BB{219};
   cluon::OD4Session &m_od4;
   int m_senderStamp{221};
+  uint32_t m_speedId1{1504};
+  uint32_t m_speedId2{0};
   // path
   float m_distanceBetweenPoints{0.5f};
   // steering
@@ -158,6 +160,8 @@ class Track {
   uint16_t m_case;
   float m_preview;
   float m_minPreview;
+  float m_groundSpeedReadingLeft;
+  float m_groundSpeedReadingRight;
   std::string folderName;
   std::mutex m_sendMutex;
 };
