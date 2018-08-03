@@ -55,6 +55,7 @@ class Track {
   float bPID(float dt, float groundSpeed);
   float aPID(float dt, float groundSpeed);
   void resetPID();
+  float lowPass(int factor, float lastOutput, float presentReading);
 
   /* commandlineArguments */
   cluon::OD4Session m_od4BB{219};
@@ -68,6 +69,7 @@ class Track {
   bool m_moveOrigin{true};
   bool m_orderPath{true};
   bool m_curveFitPath{false};
+  float m_curveFitDistance{10.0f};
   bool m_ignoreOnePoint{true};
   bool m_calcDtaOnX{false};
   float m_previewTime{1.0f};
@@ -81,6 +83,11 @@ class Track {
   float m_previewTimeSlam{0.5f};
   float m_minPrevDistSlam{2.0f};
   float m_steerRateSlam{50.0f};
+  float m_aimRate{100.0f};
+  float m_aimFreq{1000.0f};
+  float m_prevAimReqRatio{0.0f};
+  bool m_useYawRate{true};
+  int m_lowPassfactor{0};
   //sharp
   bool m_sharp{false};
   int m_nSharp{10};
@@ -114,6 +121,9 @@ class Track {
   float m_bKp{0.1f};
   float m_bKd{0.0f};
   float m_bKi{0.0f};
+  float m_sKp{1.0f};
+  float m_sKd{0.2f};
+  float m_sKi{0.0f};
   // curvature estimation
   bool m_polyFit{false};
   int m_step{5};
@@ -124,6 +134,8 @@ class Track {
   float m_wheelAngleLimit{30.0f};
   float m_wheelBase{1.53f};
   float m_frontToCog{0.765f};
+
+  //bool m_skidpadMode{false};
 
   /* Member variables */
   float const m_PI = 3.14159265f;
@@ -162,6 +174,12 @@ class Track {
   float m_minPreview;
   float m_groundSpeedReadingLeft;
   float m_groundSpeedReadingRight;
+  std::mutex m_yawMutex;
+  float m_yawRate;
+  float m_sEPrev;
+  float m_sEi;
+  float m_aimClock;
+  float m_prevAngleToAimPoint;
   std::string folderName;
   std::mutex m_sendMutex;
 };

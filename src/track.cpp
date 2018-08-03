@@ -60,6 +60,12 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_minPreview{},
   m_groundSpeedReadingLeft{0.0f},
   m_groundSpeedReadingRight{0.0f},
+  m_yawMutex{},
+  m_yawRate{0.0f},
+  m_sEPrev{0.0f},
+  m_sEi{0.0f},
+  m_aimClock{true},
+  m_prevAngleToAimPoint{0.0f},
   folderName{},
   m_sendMutex()
 {
@@ -83,6 +89,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_moveOrigin=(commandlineArguments["useMoveOrigin"].size() != 0) ? (std::stoi(commandlineArguments["useMoveOrigin"])==1) : (m_moveOrigin);
   m_orderPath=(commandlineArguments["useOrderPath"].size() != 0) ? (std::stoi(commandlineArguments["useOrderPath"])==1) : (m_orderPath);
   m_curveFitPath=(commandlineArguments["useCurveFitPath"].size() != 0) ? (std::stoi(commandlineArguments["useCurveFitPath"])==1) : (m_curveFitPath);
+  m_curveFitDistance=(commandlineArguments["curveFitDistance"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["curveFitDistance"]))) : (m_curveFitDistance);
   m_ignoreOnePoint=(commandlineArguments["ignoreOnePointPaths"].size() != 0) ? (std::stoi(commandlineArguments["ignoreOnePointPaths"])==1) : (m_ignoreOnePoint);
   m_calcDtaOnX=(commandlineArguments["calcDtaOnX"].size() != 0) ? (std::stoi(commandlineArguments["calcDtaOnX"])==1) : (m_calcDtaOnX);
   m_previewTime=(commandlineArguments["previewTime"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTime"]))) : (m_previewTime);
@@ -96,6 +103,12 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_previewTimeSlam=(commandlineArguments["previewTimeSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["previewTimeSlam"]))) : (m_previewTimeSlam);
   m_minPrevDistSlam=(commandlineArguments["minPrevDistSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["minPrevDistSlam"]))) : (m_minPrevDistSlam);
   m_steerRateSlam=(commandlineArguments["steerRateSlam"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["steerRateSlam"]))) : (m_steerRateSlam);
+  m_prevReqRatio=(commandlineArguments["prevReqRatio"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["prevReqRatio"]))) : (m_prevReqRatio);
+  m_aimRate=(commandlineArguments["aimRate"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aimRate"]))) : (m_aimRate);
+  m_aimFreq=(commandlineArguments["aimFreq"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aimFreq"]))) : (m_aimFreq);
+  m_prevAimReqRatio=(commandlineArguments["prevAimReqRatio"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["prevAimReqRatio"]))) : (m_prevAimReqRatio);
+  m_useYawRate=(commandlineArguments["useYawRate"].size() != 0) ? (std::stoi(commandlineArguments["useYawRate"])==1) : (m_useYawRate);
+  m_lowPassfactor=(commandlineArguments["lowPassfactor"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lowPassfactor"]))) : (m_lowPassfactor);
   // sharp
   m_sharp=(commandlineArguments["useSharp"].size() != 0) ? (std::stoi(commandlineArguments["useSharp"])==1) : (m_sharp);
   m_nSharp=(commandlineArguments["nSharpPreviewPoints"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nSharpPreviewPoints"]))) : (m_nSharp);
@@ -129,6 +142,9 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_bKp=(commandlineArguments["bKp"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["bKp"]))) : (m_bKp);
   m_bKd=(commandlineArguments["bKd"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["bKd"]))) : (m_bKd);
   m_bKi=(commandlineArguments["bKi"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["bKi"]))) : (m_bKi);
+  m_sKp=(commandlineArguments["sKp"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sKp"]))) : (m_sKp);
+  m_sKd=(commandlineArguments["sKd"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sKd"]))) : (m_sKd);
+  m_sKi=(commandlineArguments["sKi"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["sKi"]))) : (m_sKi);
 
   // curvature estimation
   m_polyFit=(commandlineArguments["usePolyFit"].size() != 0) ? (std::stoi(commandlineArguments["usePolyFit"])==1) : (false);
@@ -141,6 +157,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_wheelBase=(commandlineArguments["wheelBase"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelBase"]))) : (m_wheelBase);
   m_frontToCog=(commandlineArguments["frontToCog"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["frontToCog"]))) : (m_frontToCog);
 
+  //m_skidpadMode=(commandlineArguments["skidpadMode"].size() != 0) ? (std::stoi(commandlineArguments["skidpadMode"])==1) : (m_skidpadMode);
   /*//std::cout<<"Track set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
   for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
     //std::cout<<it->first<<" "<<it->second<<std::endl;
@@ -227,6 +244,11 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
       m_groundSpeed = vehicleSpeed.groundSpeed();
     }
   }
+  else if (a_container.dataType() == opendlv::proxy::AngularVelocityReading::ID()) {
+    std::lock_guard<std::mutex> lockYaw(m_yawMutex);
+    auto yawRate = cluon::extractMessage<opendlv::proxy::AngularVelocityReading>(std::move(a_container));
+    m_yawRate = yawRate.angularVelocityZ();
+  }
   else if (a_container.dataType() == opendlv::logic::perception::GroundSurfaceProperty::ID()) {
     m_STOP = true;
   }
@@ -240,7 +262,6 @@ bool Track::slamParams()
 {
   //std::cout<<"SLAM ACTIVATEEEEEEEEEEEEEEEEEEEEEEEEED!!!"<<std::endl;
   m_keepConstVel = m_keepConstVelSlam;
-  m_curveFitPath = false;
   m_steerRate = m_steerRateSlam;
   m_minPrevDist = m_minPrevDistSlam;
   m_previewTime = m_previewTimeSlam;
@@ -536,6 +557,7 @@ float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
 
 std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, float groundSpeedCopy) {
   float headingRequest;
+  float angleToAimPoint = 0.0f;
   float distanceToAimPoint;
   Eigen::Vector2f aimPoint(2);
   bool noPath = false;
@@ -566,13 +588,29 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
       localPath = localPathTmp;
     }
     //std::cout<<"localPath:\n "<<localPath<<std::endl;
-    if (m_curveFitPath && localPath.rows()>4) {
-      /*localPathTmp = Eigen::MatrixXf::Zero(localPath.rows()+1,2); //Begin path at 0,0
+    if (m_curveFitPath) {
+      localPathTmp = Eigen::MatrixXf::Zero(localPath.rows()+1,2); //Begin path at 0,0
       localPathTmp.bottomRows(localPath.rows())=localPath;
-      localPath = localPathTmp;*/
+      float sumPoints = localPathTmp.row(0).norm(); //TODO: if above is used, this is same as sumPoints=0;
+      int k=0;
+      while (m_curveFitDistance >= sumPoints && k < localPathTmp.rows()-1) {
+        sumPoints += (localPathTmp.row(k+1)-localPathTmp.row(k)).norm();
+        k++;
+        if (k < localPathTmp.rows()-1) {
+          if (localPathTmp(k+1,0)<localPathTmp(k,0)) {
+            break;
+          }
+        }
+      }
+    }
+    if (m_curveFitPath && localPathTmp.rows()>10) {
+      localPath = localPathTmp;
+      localPathTmp = Eigen::MatrixXf::Zero(localPath.rows()+1,2); //Begin path at 0,0
+      localPathTmp.bottomRows(localPath.rows())=localPath;
+      localPath = localPathTmp;
       float sumPoints = localPath.row(0).norm(); //TODO: if above is used, this is same as sumPoints=0;
       int k=0;
-      while (10.0f >= sumPoints && k < localPath.rows()-1) {
+      while (m_curveFitDistance >= sumPoints && k < localPath.rows()-1) {
         sumPoints += (localPath.row(k+1)-localPath.row(k)).norm();
         k++;
         if (k < localPath.rows()-1) {
@@ -582,7 +620,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         }
       }
       localPath = localPath.topRows(k);
-      /*if (localPath.row(1).norm()>m_distanceBetweenPoints) { //add more points between car and first point (assuming first point is zero)
+      if (localPath.row(1).norm()>m_distanceBetweenPoints) { //add more points between car and first point (assuming first point is zero)
         int addPoints = static_cast<int>(floorf(localPath.row(1).norm()/m_distanceBetweenPoints));
         localPathTmp.resize(localPath.rows()+addPoints-1,2);
         localPathTmp.bottomRows(localPath.rows()-1)=localPath.bottomRows(localPath.rows()-1);
@@ -590,7 +628,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
           localPathTmp.row(i)=m_distanceBetweenPoints*(localPath.row(1)/(localPath.row(1).norm()))*i;
           //std::cout<<"point added: "<< localPathTmp.row(i)<<std::endl;
         }
-      }*/
+      }
       //std::cout<<"localPathTmp:\n "<<localPathTmp<<std::endl;
       float xNorm = localPath(0,0); //TODO: no need to normalize if starting at 0,0
       float yNorm = localPath(0,1);
@@ -627,6 +665,10 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
       m_od4.send(plot, sampleTime, m_senderStamp);*/
     }
   }
+
+  m_steerTockDt = std::chrono::system_clock::now();
+  std::chrono::duration<float> DT = m_steerTockDt-m_steerTickDt;
+  float dt = (DT.count()<1.0f) ? (DT.count()) : (0.1f); // Avoid large DT's to give high control outputs
 
   if (!noPath) {
     // Calculate the distance between vehicle and aimpoint;
@@ -680,8 +722,49 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
     else {
       aimPoint = localPath.row(localPath.rows()-1);
     }
-    // Angle to aimpoint
-    headingRequest = atan2f(aimPoint(1),aimPoint(0));
+
+    m_aimClock+=DT.count();
+    if (m_aimClock>(1.0f/m_aimFreq)) {
+      m_aimClock = 0.0f;
+      // Angle to aimpoint
+      angleToAimPoint = atan2f(aimPoint(1),aimPoint(0));
+    }
+    else{
+      angleToAimPoint=m_prevAngleToAimPoint;
+    }
+
+    if (std::abs(angleToAimPoint-m_prevAngleToAimPoint)/dt>(m_aimRate*m_PI/180.0)){
+      if (angleToAimPoint > m_prevAngleToAimPoint) {
+        angleToAimPoint = dt*m_aimRate*m_PI/180.0f + m_prevAngleToAimPoint;
+      }
+      else{
+        angleToAimPoint = -dt*m_aimRate*m_PI/180.0f + m_prevAngleToAimPoint;
+      }
+    }
+    if (m_prevAimReqRatio > 0.0f) {
+      angleToAimPoint = m_prevAimReqRatio*m_prevAngleToAimPoint + (1.0f-m_prevAimReqRatio)*angleToAimPoint;
+    }
+    if (m_lowPassfactor>0) {
+      angleToAimPoint = lowPass(m_lowPassfactor, m_prevAngleToAimPoint, angleToAimPoint);
+    }
+
+    float e = angleToAimPoint;
+    float ed=0.0f;
+    if (m_useYawRate) {
+      ed = m_yawRate;
+    }
+    else {
+      ed = (e-m_sEPrev)/dt;
+    }
+    if (groundSpeedCopy<=0.0f) {
+      m_sEi=0.0f;
+    }
+    else{
+      m_sEi+=e*dt;
+    }
+    headingRequest = e*m_sKp+ed*m_sKd+m_sEi*m_sKi;
+    m_sEPrev=e;
+
     // Limit heading request due to physical limitations
     if (headingRequest>=0) {
       headingRequest = std::min(headingRequest,m_wheelAngleLimit*m_PI/180.0f);
@@ -714,9 +797,6 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
     //std::cout<<" to: "<<headingRequest<<std::endl;
   }
 
-  m_steerTockDt = std::chrono::system_clock::now();
-  std::chrono::duration<float> DT = m_steerTockDt-m_steerTickDt;
-  float dt = (DT.count()<1.0f) ? (DT.count()) : (0.1f); // Avoid large DT's to give high control outputs
   if (std::abs(headingRequest-m_prevHeadingRequest)/dt>(m_steerRate*m_PI/180.0)){
     if (headingRequest > m_prevHeadingRequest) { //leftTurn
       headingRequest = dt*m_steerRate*m_PI/180.0f + m_prevHeadingRequest;
@@ -725,7 +805,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
       headingRequest = -dt*m_steerRate*m_PI/180.0f + m_prevHeadingRequest;
     }
   }
-
+  m_prevAngleToAimPoint = angleToAimPoint;
   m_prevHeadingRequest=headingRequest;
   m_steerTickDt = std::chrono::system_clock::now();
   return std::make_tuple(headingRequest,distanceToAimPoint);
@@ -745,9 +825,11 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
   bool slam;
   if (pathLength>m_maxPathLengthLocal) {
     slam=true;
+    //std::cout<<"SLAM"<<std::endl;
   }
   else{
     slam=false;
+    //std::cout<<"LOCAL"<<std::endl;
   }
 
   m_tockDt = std::chrono::system_clock::now();
@@ -821,7 +903,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
 
       speedProfile(aIdx)=speedProfile(rIdx);
     }
-
+    //std::cout<<"speedProfile: \n"<<speedProfile<<std::endl;
     float tb;
     float tv=0.0f;
     float s=0.0f;
@@ -1072,7 +1154,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     }
   }
   //std::cout<<"aim: "<<m_aimVel<<" acc: "<<accelerationRequest<<" V: "<<groundSpeedCopy<<std::endl;
-
+  //std::cout<<"m_critVel: "<<m_critVel<<" m_aimVel: "<<m_aimVel<<std::endl;
   /* --write data to file-- */
   m_fullTime += DT.count();
   std::ofstream eiFile;
@@ -1512,4 +1594,8 @@ float Track::aPID(float dt, float groundSpeed){
 void Track::resetPID(){
   m_ei=0.0f;
   m_ePrev=0.0f;
+}
+float Track::lowPass(int factor, float lastOutput, float presentReading)
+{
+  return (factor * lastOutput + presentReading) / (factor+1);
 }
