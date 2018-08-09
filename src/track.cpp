@@ -66,6 +66,9 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_sEi{0.0f},
   m_aimClock{true},
   m_prevAngleToAimPoint{0.0f},
+  m_aimPointRate{0.0f},
+  m_rateCount{0},
+  m_timeSinceLastCorrection{0.0f},
   folderName{},
   m_sendMutex()
 {
@@ -86,6 +89,10 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   // path
   m_distanceBetweenPoints=(commandlineArguments["distanceBetweenPoints"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["distanceBetweenPoints"]))) : (m_distanceBetweenPoints);
   // steering
+  m_correctionCooldown=(commandlineArguments["correctionCooldown"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["correctionCooldown"]))) : (m_correctionCooldown);
+  m_aimDeltaLimit=(commandlineArguments["aimDeltaLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["aimDeltaLimit"]))) : (m_aimDeltaLimit);
+  m_k=(commandlineArguments["k"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["k"]))) : (m_k);
+  m_useSteerRateControl=(commandlineArguments["useSteerRateControl"].size() != 0) ? (std::stoi(commandlineArguments["useSteerRateControl"])==1) : (false);
   m_moveOrigin=(commandlineArguments["useMoveOrigin"].size() != 0) ? (std::stoi(commandlineArguments["useMoveOrigin"])==1) : (m_moveOrigin);
   m_orderPath=(commandlineArguments["useOrderPath"].size() != 0) ? (std::stoi(commandlineArguments["useOrderPath"])==1) : (m_orderPath);
   m_curveFitPath=(commandlineArguments["useCurveFitPath"].size() != 0) ? (std::stoi(commandlineArguments["useCurveFitPath"])==1) : (m_curveFitPath);
@@ -158,10 +165,10 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_frontToCog=(commandlineArguments["frontToCog"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["frontToCog"]))) : (m_frontToCog);
 
   //m_skidpadMode=(commandlineArguments["skidpadMode"].size() != 0) ? (std::stoi(commandlineArguments["skidpadMode"])==1) : (m_skidpadMode);
-  /*//std::cout<<"Track set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
+  std::cout<<"Track set up with "<<commandlineArguments.size()<<" commandlineArguments: "<<std::endl;
   for (std::map<std::string, std::string >::iterator it = commandlineArguments.begin();it !=commandlineArguments.end();it++){
-    //std::cout<<it->first<<" "<<it->second<<std::endl;
-  }*/
+    std::cout<<it->first<<" "<<it->second<<std::endl;
+  }
   std::stringstream currentDateTime;
        time_t ttNow = time(0);
        tm * ptmNow;
@@ -556,7 +563,7 @@ float Track::driverModelSharp(Eigen::MatrixXf localPath, float previewDistance){
 
 
 std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, float groundSpeedCopy) {
-  float headingRequest;
+  float headingRequest = m_prevHeadingRequest;
   float angleToAimPoint = 0.0f;
   float distanceToAimPoint;
   Eigen::Vector2f aimPoint(2);
@@ -715,6 +722,10 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         aimPoint = (localPath.row(k+1)-localPath.row(k))*(distanceP1AimPoint/distanceP1P2) + localPath.row(k);
       }
       else {// Place aimpoint on first path element
+        /*distanceP1P2 = localPath.row(0).norm(); // Distance is equal to the distance to the first point;
+        overshoot = sumPoints - previewDistance;
+        distanceP1AimPoint = distanceP1P2 - overshoot;
+        aimPoint = localPath.row(0)*(distanceP1AimPoint/distanceP1P2);*/
         aimPoint = localPath.row(0);
       }
     }
@@ -750,28 +761,55 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
 
     float e = angleToAimPoint;
     float ed=0.0f;
-    if (m_useYawRate) {
-      ed = m_yawRate;
+    float steeringDelta = 0.0f;
+    if (m_useSteerRateControl) {
+      if (std::abs(angleToAimPoint-m_prevAngleToAimPoint)<m_aimDeltaLimit) {
+        m_aimPointRate += (angleToAimPoint - m_prevAngleToAimPoint) / DT.count();
+        m_rateCount+=1;
+        m_timeSinceLastCorrection += DT.count();
+        std::cout<<"m_aimPointRate sum: "<<m_aimPointRate<<" m_rateCount: "<<m_rateCount<<" m_timeSinceLastCorrection "<< m_timeSinceLastCorrection<<std::endl;
+        if (m_timeSinceLastCorrection > m_correctionCooldown){
+          m_aimPointRate=m_aimPointRate/m_rateCount;
+          steeringDelta = m_k * m_aimPointRate;
+          headingRequest = m_prevHeadingRequest + steeringDelta;
+          std::cout<<"---- headingRequest" <<headingRequest<< "m_aimPointRate: "<<m_aimPointRate<<" steeringDelta: "<<steeringDelta<<std::endl;
+          m_rateCount=0;
+          m_timeSinceLastCorrection=0.0f;
+          m_aimPointRate=0.0f;
+        }
+      }
+      else {
+        m_aimPointRate=m_aimPointRate/m_rateCount;
+        steeringDelta = m_k * m_aimPointRate;
+        headingRequest = m_prevHeadingRequest + steeringDelta;
+        m_rateCount = 0;
+        m_timeSinceLastCorrection = 0.0f;
+        m_aimPointRate =0.0f;
+      }
     }
     else {
-      ed = (e-m_sEPrev)/dt;
-    }
-    if (groundSpeedCopy<=0.0f) {
-      m_sEi=0.0f;
-    }
-    else{
-      m_sEi+=e*dt;
-    }
-    headingRequest = e*m_sKp+ed*m_sKd+m_sEi*m_sKi;
-    m_sEPrev=e;
+      if (m_useYawRate) {
+        ed = m_yawRate;
+      }
+      else {
+        ed = (e-m_sEPrev)/dt;
+      }
+      if (groundSpeedCopy<=0.0f) {
+        m_sEi=0.0f;
+      }
+      else{
+        m_sEi+=e*dt;
+      }
+      headingRequest = e*m_sKp+ed*m_sKd+m_sEi*m_sKi;
+      m_sEPrev=e;
 
-    // Limit heading request due to physical limitations
-    if (headingRequest>=0) {
-      headingRequest = std::min(headingRequest,m_wheelAngleLimit*m_PI/180.0f);
-    } else {
-      headingRequest = std::max(headingRequest,-m_wheelAngleLimit*m_PI/180.0f);
+      // Limit heading request due to physical limitations
+      if (headingRequest>=0) {
+        headingRequest = std::min(headingRequest,m_wheelAngleLimit*m_PI/180.0f);
+      } else {
+        headingRequest = std::max(headingRequest,-m_wheelAngleLimit*m_PI/180.0f);
+      }
     }
-
     distanceToAimPoint=aimPoint.norm();
   }
   else{
@@ -903,6 +941,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
 
       speedProfile(aIdx)=speedProfile(rIdx);
     }
+    //averageSpeed=speedProfile(0);
     //std::cout<<"speedProfile: \n"<<speedProfile<<std::endl;
     float tb;
     float tv=0.0f;
@@ -979,7 +1018,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
           resetPID();
         }
       }
-      if (aIdx>=0 && aIdx<5) {
+      if (aIdx>=0 && aIdx<10) {
         if ((m_minRadius-m_apexRadius)<1.0f) { //before apex
           if (m_critVel<m_aimVel) {
             m_aimVel = m_critVel;
@@ -997,7 +1036,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       m_accClock+=DT.count();
       if (m_accClock>(1.0f/m_accFreq)) {
         m_accClock = 0.0f;
-        if (aIdx>=0 && aIdx<5 && (m_minRadius-m_apexRadius)<1.0f) {
+        if (aIdx>=0 && aIdx<10 && (m_minRadius-m_apexRadius)<1.0f) {
           if (m_critVel<m_aimVel) {
             m_aimVel = m_critVel;
           }
@@ -1153,6 +1192,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       accelerationRequest = 0.0f;
     }
   }
+  //std::cout<<m_aimVel<<std::endl;
   //std::cout<<"aim: "<<m_aimVel<<" acc: "<<accelerationRequest<<" V: "<<groundSpeedCopy<<std::endl;
   //std::cout<<"m_critVel: "<<m_critVel<<" m_aimVel: "<<m_aimVel<<std::endl;
   /* --write data to file-- */

@@ -66,6 +66,10 @@ class Track {
   // path
   float m_distanceBetweenPoints{0.5f};
   // steering
+  float m_correctionCooldown{0.3f};
+  float m_aimDeltaLimit{3.0f};
+  float m_k{2.0f};
+  bool m_useSteerRateControl{};
   bool m_moveOrigin{true};
   bool m_orderPath{true};
   bool m_curveFitPath{false};
@@ -180,6 +184,9 @@ class Track {
   float m_sEi;
   float m_aimClock;
   float m_prevAngleToAimPoint;
+  float m_aimPointRate;
+  int m_rateCount;
+  float m_timeSinceLastCorrection;
   std::string folderName;
   std::mutex m_sendMutex;
 };
