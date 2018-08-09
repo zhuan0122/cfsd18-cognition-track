@@ -69,6 +69,11 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_aimPointRate{0.0f},
   m_rateCount{0},
   m_timeSinceLastCorrection{0.0f},
+  m_yawAngle{0.0f},
+  m_longitudinalPosition{0.0f},
+  m_lateralPosition{0.0f},
+  m_groundSteeringAngle{0.0f},
+  m_groundSteeringAngleMutex{},
   folderName{},
   m_sendMutex()
 {
@@ -758,33 +763,85 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
     if (m_lowPassfactor>0) {
       angleToAimPoint = lowPass(m_lowPassfactor, m_prevAngleToAimPoint, angleToAimPoint);
     }
+    std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
+    cluon::data::TimeStamp sampleTime = cluon::time::convert(tp);
+    opendlv::logic::action::AimPoint aim; //TODO for plot only
+    aim.azimuthAngle(angleToAimPoint);
+    aim.distance(aimPoint.norm());
+    m_od4.send(aim, sampleTime, 55);
 
     float e = angleToAimPoint;
     float ed=0.0f;
     float steeringDelta = 0.0f;
     if (m_useSteerRateControl) {
-      if (std::abs(angleToAimPoint-m_prevAngleToAimPoint)<m_aimDeltaLimit) {
-        m_aimPointRate += (angleToAimPoint - m_prevAngleToAimPoint) / DT.count();
-        m_rateCount+=1;
-        m_timeSinceLastCorrection += DT.count();
-        std::cout<<"m_aimPointRate sum: "<<m_aimPointRate<<" m_rateCount: "<<m_rateCount<<" m_timeSinceLastCorrection "<< m_timeSinceLastCorrection<<std::endl;
-        if (m_timeSinceLastCorrection > m_correctionCooldown){
-          m_aimPointRate=m_aimPointRate/m_rateCount;
-          steeringDelta = m_k * m_aimPointRate;
-          headingRequest = m_prevHeadingRequest + steeringDelta;
-          std::cout<<"---- headingRequest" <<headingRequest<< "m_aimPointRate: "<<m_aimPointRate<<" steeringDelta: "<<steeringDelta<<std::endl;
-          m_rateCount=0;
-          m_timeSinceLastCorrection=0.0f;
-          m_aimPointRate=0.0f;
+      float observationTrustRatio = 0.6f;
+      float predictionTrustRatio = 1.0f - observationTrustRatio;
+      m_aimPointRate += (angleToAimPoint - m_prevAngleToAimPoint) / DT.count();
+      m_rateCount+=1;
+      m_timeSinceLastCorrection += DT.count();
+      std::cout<<"m_aimPointRate sum: "<<m_aimPointRate<<" m_rateCount: "<<m_rateCount<<" m_timeSinceLastCorrection "<< m_timeSinceLastCorrection<<std::endl;
+      if (m_timeSinceLastCorrection > m_correctionCooldown){
+        m_aimPointRate = m_aimPointRate / m_rateCount;
+
+        float lateralSpeed = 0.0f;
+        float yawRate;
+        float groundSteeringAngle;
+        {
+          std::lock_guard<std::mutex> lockYaw(m_yawMutex);
+          yawRate = m_yawRate;
         }
-      }
-      else {
-        m_aimPointRate=m_aimPointRate/m_rateCount;
-        steeringDelta = m_k * m_aimPointRate;
+        {
+          std::lock_guard<std::mutex> lockSteer(m_groundSteeringAngleMutex);
+          groundSteeringAngle=m_groundSteeringAngle;
+        }
+        float predictionHorizon = m_correctionCooldown;
+        float predictionDt = 0.01f;
+        for (double t = 0; t < predictionHorizon; t += predictionDt) {
+          auto VM = vehicleModel(groundSpeedCopy, lateralSpeed, yawRate, groundSteeringAngle, predictionDt);
+          lateralSpeed = std::get<0>(VM);
+          yawRate = std::get<1>(VM);
+        }
+
+        float predictedAimPointAngle1;
+        {
+          float predictedLongitudinalPosition = m_longitudinalPosition;
+          float predictedLateralPosition = m_lateralPosition;
+          float predictedYawAngle = m_yawAngle;
+
+          float aimPointLongitudinalPosition = aimPoint(0) - predictedLongitudinalPosition;
+          float aimPointLateralPosition = aimPoint(1) - predictedLateralPosition;
+
+          predictedAimPointAngle1 = tanf(aimPointLateralPosition / aimPointLongitudinalPosition) - predictedYawAngle;
+        }
+
+        auto VM = vehicleModel(groundSpeedCopy, lateralSpeed, yawRate, groundSteeringAngle, predictionDt);
+        lateralSpeed = std::get<0>(VM);
+        yawRate = std::get<1>(VM);
+        float predictedAimPointAngle2;
+        {
+          float predictedLongitudinalPosition = m_longitudinalPosition;
+          float predictedLateralPosition = m_lateralPosition;
+          float predictedYawAngle = m_yawAngle;
+
+          float aimPointLongitudinalPosition = aimPoint(0) - predictedLongitudinalPosition;
+          float aimPointLateralPosition = aimPoint(1) - predictedLateralPosition;
+
+          predictedAimPointAngle2 = tanf(aimPointLateralPosition / aimPointLongitudinalPosition) - predictedYawAngle;
+        }
+
+        float predictedAimPointRate = (predictedAimPointAngle2 - predictedAimPointAngle1) / DT.count();
+
+        steeringDelta = observationTrustRatio * m_k * m_aimPointRate + predictionTrustRatio * m_k * predictedAimPointRate;
         headingRequest = m_prevHeadingRequest + steeringDelta;
+
+        std::cout << "---- headingRequest" << headingRequest << "m_aimPointRate: " << m_aimPointRate << " steeringDelta: " << steeringDelta << std::endl;
+
         m_rateCount = 0;
         m_timeSinceLastCorrection = 0.0f;
-        m_aimPointRate =0.0f;
+        m_aimPointRate = 0.0f;
+        m_yawAngle=0.0f;
+        m_lateralPosition=0.0f;
+        m_longitudinalPosition=0.0f;
       }
     }
     else {
@@ -810,7 +867,7 @@ std::tuple<float, float> Track::driverModelSteering(Eigen::MatrixXf localPath, f
         headingRequest = std::max(headingRequest,-m_wheelAngleLimit*m_PI/180.0f);
       }
     }
-    distanceToAimPoint=aimPoint.norm();
+    distanceToAimPoint=10.0f;//aimPoint.norm();
   }
   else{
     headingRequest=m_prevHeadingRequest;
@@ -1638,4 +1695,32 @@ void Track::resetPID(){
 float Track::lowPass(int factor, float lastOutput, float presentReading)
 {
   return (factor * lastOutput + presentReading) / (factor+1);
+}
+
+std::tuple< float, float> Track::vehicleModel(float longitudinalSpeed, float lateralSpeed, float yawRate, float groundSteeringAngle, float dt)
+{
+  float frontToCog = 0.765f;
+  float mass = 225.0f;
+  float momentOfInertiaZ = 105.0f;
+  float length = 1.53f;
+  float rearToCog = length-frontToCog;
+
+  float slipAngleFront = groundSteeringAngle - atan2f(lateralSpeed + frontToCog * yawRate, std::abs(longitudinalSpeed));
+  float slipAngleRear = -atan2f(lateralSpeed - rearToCog * yawRate, std::abs(longitudinalSpeed));
+
+  float forceFrontY = 20000.0f*slipAngleFront;
+  float forceRearY = 20000.0f*slipAngleRear;
+
+  float lateralSpeedDot = (forceFrontY * cosf(groundSteeringAngle) + forceRearY) / mass - yawRate * longitudinalSpeed;
+
+  float yawRateDot = (frontToCog * forceFrontY * cosf(groundSteeringAngle) - rearToCog * forceRearY) / momentOfInertiaZ;
+
+  lateralSpeed = lateralSpeed + lateralSpeedDot * dt;
+  yawRate = yawRate + yawRateDot * dt;
+
+  m_lateralPosition += lateralSpeed * dt;
+  m_longitudinalPosition += longitudinalSpeed * dt;
+  m_yawAngle += yawRate*dt;
+
+  return std::make_tuple(lateralSpeed, yawRate);
 }

@@ -56,6 +56,7 @@ class Track {
   float aPID(float dt, float groundSpeed);
   void resetPID();
   float lowPass(int factor, float lastOutput, float presentReading);
+  std::tuple<float, float> vehicleModel(float longitudinalSpeed, float lateralSpeed, float yawRate, float groundSteeringAngle, float dt);
 
   /* commandlineArguments */
   cluon::OD4Session m_od4BB{219};
@@ -187,6 +188,11 @@ class Track {
   float m_aimPointRate;
   int m_rateCount;
   float m_timeSinceLastCorrection;
+  float m_yawAngle;
+  float m_longitudinalPosition;
+  float m_lateralPosition;
+  float m_groundSteeringAngle;
+  std::mutex m_groundSteeringAngleMutex;
   std::string folderName;
   std::mutex m_sendMutex;
 };
