@@ -66,6 +66,7 @@ Track::Track(std::map<std::string, std::string> commandlineArguments, cluon::OD4
   m_sEi{0.0f},
   m_aimClock{true},
   m_prevAngleToAimPoint{0.0f},
+  m_prevAccelerationRequest{0.0f},
   folderName{},
   m_sendMutex()
 {
@@ -109,6 +110,7 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_prevAimReqRatio=(commandlineArguments["prevAimReqRatio"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["prevAimReqRatio"]))) : (m_prevAimReqRatio);
   m_useYawRate=(commandlineArguments["useYawRate"].size() != 0) ? (std::stoi(commandlineArguments["useYawRate"])==1) : (m_useYawRate);
   m_lowPassfactor=(commandlineArguments["lowPassfactor"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lowPassfactor"]))) : (m_lowPassfactor);
+  m_lowPassfactorAcc=(commandlineArguments["lowPassfactorAcc"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["lowPassfactorAcc"]))) : (m_lowPassfactorAcc);
   // sharp
   m_sharp=(commandlineArguments["useSharp"].size() != 0) ? (std::stoi(commandlineArguments["useSharp"])==1) : (m_sharp);
   m_nSharp=(commandlineArguments["nSharpPreviewPoints"].size() != 0) ? (static_cast<int>(std::stoi(commandlineArguments["nSharpPreviewPoints"]))) : (m_nSharp);
@@ -154,7 +156,6 @@ void Track::setUp(std::map<std::string, std::string> commandlineArguments)
   m_segmentizePolyfit=(commandlineArguments["segmentizePolyfit"].size() != 0) ? (std::stoi(commandlineArguments["segmentizePolyfit"])==1) : (false);
   // vehicle specific
   m_wheelAngleLimit=(commandlineArguments["wheelAngleLimit"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelAngleLimit"]))) : (m_wheelAngleLimit);
-  m_wheelBase=(commandlineArguments["wheelBase"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["wheelBase"]))) : (m_wheelBase);
   m_frontToCog=(commandlineArguments["frontToCog"].size() != 0) ? (static_cast<float>(std::stof(commandlineArguments["frontToCog"]))) : (m_frontToCog);
 
   //m_skidpadMode=(commandlineArguments["skidpadMode"].size() != 0) ? (std::stoi(commandlineArguments["skidpadMode"])==1) : (m_skidpadMode);
@@ -860,7 +861,10 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     speedProfile.resize(curveRadii.size());
     for (uint32_t k = 0; k < curveRadii.size(); k++){
       speedProfile(k) = std::min(sqrtf(m_ayLimit*curveRadii[k]),m_velocityLimit);//*(1.0f-headingError*headingErrorDependency);
-      if (n<20) {
+      if (speedProfile(k)<m_localVel) {
+        speedProfile(k)=m_localVel;
+      }
+      if (n<10) {
         averageSpeed+=speedProfile(k);
         n++;
       }
@@ -931,7 +935,7 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
     /*---------------State selection---------------*/
     /*BRAKING STATE*/
     if(critDiff<=m_critDiff){ //braking is critical
-      if (((groundSpeedCopy-speedProfile(idx))>m_diffToBrakeVel) || m_brakingState) {
+      if (((groundSpeedCopy-m_critVel)>m_diffToBrakeVel) || m_brakingState) {
         if (m_critVel<m_aimVel) {
           m_aimVel = m_critVel;
         }
@@ -1141,10 +1145,16 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
 
   if (m_brakingState || m_case==1 || m_case==2 || m_case==5) {
     accelerationRequest = bPID(dt, groundSpeedCopy);
+    if (!m_prevState && m_lowPassfactorAcc>0) {
+      accelerationRequest = lowPass(m_lowPassfactorAcc, m_prevAccelerationRequest, accelerationRequest);
+    }
     m_prevState=false;
   }
   else if (m_accelerationState || m_case==3 || m_case==4 || m_case==6) {
     accelerationRequest = aPID(dt, groundSpeedCopy);
+    if (m_prevState && m_lowPassfactorAcc>0) {
+      accelerationRequest = lowPass(m_lowPassfactorAcc, m_prevAccelerationRequest, accelerationRequest);
+    }
     m_prevState=true;
   }
 
@@ -1153,6 +1163,8 @@ float Track::driverModelVelocity(Eigen::MatrixXf localPath, float groundSpeedCop
       accelerationRequest = 0.0f;
     }
   }
+  m_prevAccelerationRequest=accelerationRequest;
+  //std::cout<<m_aimVel<<"    |    "<<groundSpeedCopy<<"    |    "<<accelerationRequest<<std::endl;
   //std::cout<<"aim: "<<m_aimVel<<" acc: "<<accelerationRequest<<" V: "<<groundSpeedCopy<<std::endl;
   //std::cout<<"m_critVel: "<<m_critVel<<" m_aimVel: "<<m_aimVel<<std::endl;
   /* --write data to file-- */

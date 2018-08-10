@@ -88,6 +88,7 @@ class Track {
   float m_prevAimReqRatio{0.0f};
   bool m_useYawRate{true};
   int m_lowPassfactor{0};
+  int m_lowPassfactorAcc{0};
   //sharp
   bool m_sharp{false};
   int m_nSharp{10};
@@ -132,7 +133,6 @@ class Track {
   bool m_segmentizePolyfit{false};
   // vehicle specific
   float m_wheelAngleLimit{30.0f};
-  float m_wheelBase{1.53f};
   float m_frontToCog{0.765f};
 
   //bool m_skidpadMode{false};
@@ -180,6 +180,7 @@ class Track {
   float m_sEi;
   float m_aimClock;
   float m_prevAngleToAimPoint;
+  float m_prevAccelerationRequest;
   std::string folderName;
   std::mutex m_sendMutex;
 };
