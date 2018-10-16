@@ -13,33 +13,35 @@
 - nextContainer function: take a reference: a_container from cluon::data::Envelope to extract different data according to the opendlv::proxy  input id. these information extracted from perception include GroundSpeed,surfaceId,surfaceInframe,GroundSurfaceArea with the localpath point location vetors.
 
 
-  ```
+```
   // make sure the objectID is the current frame id 
   if (m_newId) {
       m_objectId = (objectId!=m_lastObjectId)?(objectId):(-1);
       m_newId=(m_objectId !=-1)?(false):(true);
   } 
-// Unpack location message from perception, mainly for four corner points in the frame(surfaceArea)
-float x1 = groundSurfaceArea.x1(); 
-float y1 = groundSurfaceArea.y1();
-float x2 = groundSurfaceArea.x2();
-float y2 = groundSurfaceArea.y2();
-float x3 = groundSurfaceArea.x3();
-float y3 = groundSurfaceArea.y3();
-float x4 = groundSurfaceArea.x4();
-float y4 = groundSurfaceArea.y4();
 
-// get the two midpoints of the surfaceframe, coordinates: (v[0],v[1]), (v[2],v[3])
-std::vector<float> v(4); 
-v[0] = (x1+x2)/2.0f;
-v[1] = (y1+y2)/2.0f;
-v[2] = (x3+x4)/2.0f;
-v[3] = (y3+y4)/2.0f;
+ // Unpack location message from perception, mainly for   four corner points in the frame(surfaceArea)
 
-// set the local path size and collect points data for the local path
+ float x1 = groundSurfaceArea.x1(); 
+ float y1 = groundSurfaceArea.y1();
+ float x2 = groundSurfaceArea.x2();
+ float y2 = groundSurfaceArea.y2();
+ float x3 = groundSurfaceArea.x3();
+ float y3 = groundSurfaceArea.y3();
+ float x4 = groundSurfaceArea.x4();
+ float y4 = groundSurfaceArea.y4();
 
-Eigen::MatrixXf localPath(surfaceFrame.size()*2,2);
-for (std::map<double, std::vector<float> >::iterator it = surfaceFrame.begin();it !=surfaceFrame.end();it++){
+ // get the two midpoints of the surfaceframe, coordinates: (v[0],v[1]), (v[2],v[3])
+ std::vector<float> v(4); 
+ v[0] = (x1+x2)/2.0f;\n
+ v[1] = (y1+y2)/2.0f;\n
+ v[2] = (x3+x4)/2.0f;\n
+ v[3] = (y3+y4)/2.0f;\n
+
+ // set the local path size and collect points data for the local path
+
+ Eigen::MatrixXf localPath(surfaceFrame.size()*2,2);
+ for (std::map<double, std::vector<float> >::iterator it = surfaceFrame.begin();it !=surfaceFrame.end();it++){
       v=it->second;
       localPath(2*I,0)=v[0];
       localPath(2*I,1)=v[1];
@@ -47,7 +49,7 @@ for (std::map<double, std::vector<float> >::iterator it = surfaceFrame.begin();i
       localPath(2*I+1,1)=v[3];
       I++;
     }
-  ```
+```
 
 
 
