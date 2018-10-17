@@ -58,7 +58,7 @@ surfaceCollector.detach();
 
 - There are multiple frame coordinates stored in the matrix called localpath, we update the matrix using the vector v that indicates the coordinates of the middle points.
 
-- removing the points that have negative coordinate values.
+- removing the points that have negative coordinate values. The variable preSet indicates that the current matrix is still empty.
 
 ```cpp
 while (localPath(count,0)<0.0f){
@@ -72,4 +72,42 @@ while (localPath(count,0)<0.0f){
         }
     }
 ```
+
+- If it is not the initial matrix (!preSet==TRUE), then resizing the matrix to get rid of the negative path points
+
+```cpp
+if (!preSet) {
+      Eigen::MatrixXf localPathTmp = localPath.bottomRows(localPath.rows()-count);
+      localPath.resize(localPath.rows()-count,2);
+      localPath = localPathTmp;
+    }
+```
+
+- Also check if there is a stop or a one point signal.
+
+- In the matrix, if the the second point coordinates are too small, then there is a stop.
+
+```cpp
+if (std::abs(localPath(1,0)) <= 0.0001f && std::abs(localPath(1,1)) <= 0.0001f) {
+        Eigen::MatrixXf localPathTmp = localPath.row(0);
+        localPath.resize(1,2);
+        localPath = localPathTmp;
+        STOP = true;
+        std::cout << "STOP signal recieved " << std::endl;
+      }
+```
+
+- If the first point coordinates are too small and there are only two points in the matrix, then it is a one point signal.
+
+```cpp
+lse if(std::abs(localPath(0,0)) <= 0.0001f && std::abs(localPath(0,1)) <= 0.0001f && localPath.rows()<3){
+        Eigen::MatrixXf localPathTmp = localPath.row(1);
+        localPath.resize(1,2);
+        localPath = localPathTmp;
+        std::cout << "ONE POINT signal recieved " << std::endl;
+      }
+```
+
+
+
 
