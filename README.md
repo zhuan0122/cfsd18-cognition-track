@@ -69,23 +69,23 @@
 
  // compare the pathlenth and previewDisatnce, if the preview distace is longer then the previewDistance is equal to pathlenth 
 ```
-## sharp & steering 
-``` 
+## sharp & steering  
  //  the bool variable m_sharp is set to decide which task is excuted, the sharo or the steering. and since it is set false, so it will excute driverModelSteering function, which returns a tuple consists headingRequest,distanceToAimPoint values, they are the azimuthAngle and distance of the aimpoint steer in action object. 
  
  - azimuthAngle 
- //Limit heading request due to physical limitations  and azimuthAngle is the Angle to aimpoint
+   ```
+   //Limit heading request due to physical limitations  and azimuthAngle is the Angle to aimpoint
 
- headingRequest = atan2f(aimPoint(1),aimPoint(0));
- if (headingRequest>=0) {
-    headingRequest = std::min(headingRequest,m_wheelAngleLimit*3.14159265f/180.0f);
-  } else {
-    headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
-  }
+   headingRequest = atan2f(aimPoint(1),aimPoint(0));
+   if (headingRequest>=0) {
+      headingRequest = std::min(headingRequest,m_wheelAngleLimit*3.14159265f/180.0f);
+   } else {
+     headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
+   }
 
  - Aimpoint
 
-  // distanceToAimPoint is calculated by the aimpoint,coordinates value, aimpoint is decided by the pathlenth and previewDistance we also mentioned before, the previewDistance is float decided by the groundspeed and preciewtime of the vechicle
+   // distanceToAimPoint is calculated by the aimpoint,coordinates value, aimpoint is decided by the pathlenth and previewDistance we also mentioned before, the previewDistance is float decided by the groundspeed and preciewtime of the vechicle
 
    if the path lenth is longer than previewDistance and the local path points we colleted is more than 2, then the aimpoint will be placed after the first local path points element. path elements P1, P2 are the last two elements of the local path points, where P2 is the overshoot element since he path lenth is longer than previewDistance. 
    
@@ -94,8 +94,16 @@
    if  the path lenth is shorter  than previewDistance or the local path points we colleted is less than 2, then Place aimpoint on first path element
 
    If the path is too short, place aimpoint at the last path element
-```
+   ```
 ## velocity control
+- acceleration 
+  ```
+
+  ```
+- deacceleration
+  ```
+
+  ```
 
 
 
