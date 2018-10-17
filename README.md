@@ -13,8 +13,9 @@
 - nextContainer function: take a reference: a_container from cluon::data::Envelope to extract different data according to the opendlv::proxy  input id. these information extracted from perception include GroundSpeed,surfaceId,surfaceInframe,GroundSurfaceArea with the localpath point location vetors.
 
 
-```
+
 # path 
+```
   // make sure the objectID is the current frame id 
   if (m_newId) {
       m_objectId = (objectId!=m_lastObjectId)?(objectId):(-1);
@@ -59,9 +60,54 @@
   float previewDistance = std::abs(groundSpeedCopy)*m_previewTime;
 
  // acculate the whole path lenth with all collecting path points coordinates
-  
-    
+  float pathLength=localPath.row(0).norm();
+  if(localPath.rows()>1){
+    for (int i = 0; i < localPath.rows()-1; i++) {
+      pathLength+=(localPath.row(i+1)-localPath.row(i)).norm();
+    }
+  }
+
+ // compare the pathlenth and previewDisatnce, if the preview distace is longer then the previewDistance is equal to pathlenth 
+```
+# sharp & steering 
+``` 
+ //  the bool variable m_sharp is set to decide which task is excuted, the sharo or the steering. and since it is set false, so it will excute driverModelSteering function, which returns a tuple consists headingRequest,distanceToAimPoint values, they are the azimuthAngle and distance of the aimpoint steer in action object. 
  
+ - azimuthAngle 
+ //Limit heading request due to physical limitations  and azimuthAngle is the Angle to aimpoint
+
+ headingRequest = atan2f(aimPoint(1),aimPoint(0));
+ if (headingRequest>=0) {
+    headingRequest = std::min(headingRequest,m_wheelAngleLimit*3.14159265f/180.0f);
+  } else {
+    headingRequest = std::max(headingRequest,-m_wheelAngleLimit*3.14159265f/180.0f);
+  }
+
+ - Aimpoint
+
+  // distanceToAimPoint is calculated by the aimpoint,coordinates value, aimpoint is decided by the pathlenth and previewDistance we also mentioned before, the previewDistance is float decided by the groundspeed and preciewtime of the vechicle
+
+   if the path lenth is longer than previewDistance and the local path points we colleted is more than 2, then the aimpoint will be placed after the first local path points element. path elements P1, P2 are the last two elements of the local path points, where P2 is the overshoot element since he path lenth is longer than previewDistance. 
+   
+   and the aimpoints will be the line interpolation of the line between P1 P2 and the previewDistance line. 
+
+   if  the path lenth is shorter  than previewDistance or the local path points we colleted is less than 2, then Place aimpoint on first path element
+
+   If the path is too short, place aimpoint at the last path element
+```
+# velocity control
+
+
+
+    
+
+  
+
+  
+  
+
+
+
  
 
 
