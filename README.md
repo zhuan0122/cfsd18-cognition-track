@@ -14,6 +14,7 @@
 
 
 ```
+# path 
   // make sure the objectID is the current frame id 
   if (m_newId) {
       m_objectId = (objectId!=m_lastObjectId)?(objectId):(-1);
@@ -49,12 +50,17 @@
       localPath(2*I+1,1)=v[3];
       I++;
     }
- // remove negative points and Check for stop or "one point" signal for each point  input and if the positive collecting points is more than 3, it calls
+ // remove negative points and Check for stop or "one point" signal for each collecting point and if the positive collecting points is more than 3, it calls
  placeEquidistantPoints function for placing points equidistantly along a sequence of points, taking m_distanceBetweenPoints is equal to 0.5.
  
  localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
 
- // 
+ // using groundspeed value to get preview distance for the vechile 
+  float previewDistance = std::abs(groundSpeedCopy)*m_previewTime;
+
+ // acculate the whole path lenth with all collecting path points coordinates
+  
+    
  
  
 
