@@ -49,6 +49,16 @@
       localPath(2*I+1,1)=v[3];
       I++;
     }
+ // remove negative points and Check for stop or "one point" signal for each point  input and if the positive collecting points is more than 3, it calls
+ placeEquidistantPoints function for placing points equidistantly along a sequence of points, taking m_distanceBetweenPoints is equal to 0.5.
+ 
+ localPath = Track::placeEquidistantPoints(localPathCopy,false,-1,m_distanceBetweenPoints);
+
+ // 
+ 
+ 
+
+
 ```
 
 
