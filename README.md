@@ -70,7 +70,7 @@
  // compare the pathlenth and previewDisatnce, if the preview distace is longer then the previewDistance is equal to pathlenth 
 ```
 ## sharp & steering  
- //  the bool variable m_sharp is set to decide which task is excuted, the sharo or the steering. and since it is set false, so it will excute driverModelSteering function, which returns a tuple consists headingRequest,distanceToAimPoint values, they are the azimuthAngle and distance of the aimpoint steer in action object. 
+ //  the bool variable m_sharp is set to decide which task is excuted, the sharo or the steering. and since it is set false, so it will excute driverModelSteering function, which returns a tuple consists headingRequest,distanceToAimPoint values, they are the azimuthAngle and distance of the aimpoint steer in action object. and the steer message will be sent with the m_senderstamp. 
  
  - azimuthAngle 
    ```
@@ -96,6 +96,9 @@
    If the path is too short, place aimpoint at the last path element
    ```
 ## velocity control
+ // the driverModelVelocity function returns a float varible accelerationRequest, when it is positive, it will be assigned to groundAcceleration object and the acceleration message with senderstamp  also will be sent through OD4Session.
+ when the accelerationRequest is negative and then the minus accelerationRequest value will be assigned to groundDeceleration and the deceleration message will be sent with sender stamp.
+
 - acceleration 
   ```
 
