@@ -28,7 +28,10 @@
 
 int32_t main(int32_t argc, char **argv) {
   int32_t retCode{0};
+  //// argc is The argc argument represents the number of arguments on the command line
+// argv is a pointer to another pointer to a char
   std::map<std::string, std::string> commandlineArguments = cluon::getCommandlineArguments(argc, argv);
+  // map the command line arguments to a map class
   if (commandlineArguments.size()<=0) {
     std::cerr << argv[0] << " is a driver model returning heading and acceleration requests given a discrete path in local 2D coordinates" << std::endl;
     std::cerr << "Usage:   " << argv[0] << " --cid=<OpenDaVINCI session> [--id=<Identifier in case of simulated units>] [--verbose] [Module specific parameters....]" << std::endl;
@@ -41,7 +44,8 @@ int32_t main(int32_t argc, char **argv) {
     // Interface to a running OpenDaVINCI session
     cluon::data::Envelope data;
     cluon::OD4Session od4{static_cast<uint16_t>(std::stoi(commandlineArguments["cid"]))};
-    Track track(commandlineArguments, od4);
+    // od4session :This method sets a delegate to be called data-triggered on arrival of a new Envelope for a given message identifier.
+    Track track(commandlineArguments, od4);// returns a map of strings  
 
     auto surfaceEnvelope{[&surfer = track, senderStamp = surfaceId](cluon::data::Envelope &&envelope)
       {
@@ -49,7 +53,7 @@ int32_t main(int32_t argc, char **argv) {
           surfer.nextContainer(envelope);
         }
       }
-    };
+    };// when the senderstamp form the commandline is the same as the one define in the envelope ogject, then test the reference envelope 
     auto speedEnvelope{[&surfer = track, senderStamp = speedId](cluon::data::Envelope &&envelope)
       {
         if(envelope.senderStamp() == senderStamp){

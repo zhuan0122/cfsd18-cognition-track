@@ -90,19 +90,22 @@ void Track::tearDown()
 {
 }
 
-void Track::nextContainer(cluon::data::Envelope &a_container)
+void Track::nextContainer(cluon::data::Envelope & a_container)
 {
-  if (a_container.dataType() == opendlv::proxy::GroundSpeedReading::ID()) {
-    std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);
+  if (a_container.dataType() == opendlv::proxy::GroundSpeedReading::ID()) {// test the Groundspeedreading ID type 
+    std::unique_lock<std::mutex> lockGroundSpeed(m_groundSpeedMutex);//define a speed mutex
     auto groundSpeed = cluon::extractMessage<opendlv::proxy::GroundSpeedReading>(std::move(a_container));
+    //extract groundspeedreading message into groundspeed
+    //moves the value of _container into the vector. This transfers its content into the vector (while loses its value, and now is in a valid but unspecified state).
     m_groundSpeed = groundSpeed.groundSpeed();
+    //m_groundspeed will sttroe the speed value 
     //std::cout<<"Track received GroundSpeedReading: "<<groundSpeed.groundSpeed()<<std::endl;
   }
 
-  if(a_container.dataType() == opendlv::logic::perception::GroundSurfaceProperty::ID()){
-    if (m_newClock) {
+  if(a_container.dataType() == opendlv::logic::perception::GroundSurfaceProperty::ID()){//test the groundsurfaceproperty ID type
+    if (m_newClock) {// bool 
       m_newClock = false;
-      m_tick = std::chrono::system_clock::now();
+      m_tick = std::chrono::system_clock::now(); // time 
     }
   //    m_lastTimeStamp = a_container.getSampleTimeStamp();
       auto surfaceProperty = cluon::extractMessage<opendlv::logic::perception::GroundSurfaceProperty>(std::move(a_container));
@@ -112,7 +115,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
 
       if (m_newFrame) { // If true, a frame has just been sent
         m_newFrame = false;
-        m_nSurfacesInframe = std::stoul(nSurfacesInframe);
+        m_nSurfacesInframe = std::stoul(nSurfacesInframe);//Convert string to unsigned integer
         m_surfaceId = surfaceId; // Currently not used.
         //std::cout << "SurfaceId: " << surfaceId<<std::endl;
         //std::cout << "nSurfacesInframe: " << nSurfacesInframe<<std::endl;
@@ -120,7 +123,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
 
   }
 
-  if (a_container.dataType() == opendlv::logic::perception::GroundSurfaceArea::ID()) {
+  if (a_container.dataType() == opendlv::logic::perception::GroundSurfaceArea::ID()) {//groundsurfacearea
     int objectId;
     {
     std::unique_lock<std::mutex> lockSurface(m_surfaceMutex);
@@ -132,7 +135,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
         m_objectId = (objectId!=m_lastObjectId)?(objectId):(-1); // Update object id if it is not remains from an already run frame
         //std::cout << "newId, m_objectId: " <<m_objectId <<std::endl;
         m_newId=(m_objectId !=-1)?(false):(true); // Set new id to false while collecting current frame id, or keep as true if current id is from an already run frame
-      }
+      }// ensure objectid is updated 
       //std::cout << "objectId: " <<objectId <<std::endl;
       //std::cout << "m_objectId: " <<m_objectId <<std::endl;
       //std::cout << "m_lastObjectId: " <<m_lastObjectId <<std::endl;
@@ -146,7 +149,7 @@ void Track::nextContainer(cluon::data::Envelope &a_container)
       float y4 = groundSurfaceArea.y4();
       //std::cout<<"Track recieved surface: "<<" x1: "<<x1<<" y1: "<<y1<<" x2: "<<x2<<" y2: "<<y2<<" x3: "<<x3<<" y3: "<<y3<<" x4: "<<x4<<" y4 "<<y4<<" frame ID: "<<objectId<<" timeStamp: "<<timeStamp<<std::endl;
 
-      std::vector<float> v(4);
+      std::vector<float> v(4);// define a float vector v 4 elments 
       v[0] = (x1+x2)/2.0f;
       v[1] = (y1+y2)/2.0f;
       v[2] = (x3+x4)/2.0f;
