@@ -14,7 +14,7 @@
 
 
 
-# path 
+## path 
 ```
   // make sure the objectID is the current frame id 
   if (m_newId) {
@@ -69,7 +69,7 @@
 
  // compare the pathlenth and previewDisatnce, if the preview distace is longer then the previewDistance is equal to pathlenth 
 ```
-# sharp & steering 
+## sharp & steering 
 ``` 
  //  the bool variable m_sharp is set to decide which task is excuted, the sharo or the steering. and since it is set false, so it will excute driverModelSteering function, which returns a tuple consists headingRequest,distanceToAimPoint values, they are the azimuthAngle and distance of the aimpoint steer in action object. 
  
@@ -95,7 +95,28 @@
 
    If the path is too short, place aimpoint at the last path element
 ```
-# velocity control
+## velocity control
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## curvature estimation
+
 
 
 
