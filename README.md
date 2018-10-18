@@ -135,7 +135,7 @@
     }
     for (i=0; i<speedProfile.size(); i++){
       s+=(localPath.row(i+step+1)-localPath.row(i+step)).norm();
-      distanceToCriticalPoint.push_back(s);// assign s to push_back variable
+      distanceToCriticalPoint.push_back(s);
       tb = (speedProfile(i)-groundSpeedCopy)/(axLimitNegative);
       tv = s/groundSpeedCopy; 
       if (tb>0.0f) { 
