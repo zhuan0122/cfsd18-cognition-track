@@ -108,6 +108,26 @@ lse if(std::abs(localPath(0,0)) <= 0.0001f && std::abs(localPath(0,1)) <= 0.0001
       }
 ```
 
+- Calculate the first point
 
+```cpp
+Eigen::RowVector2f firstPoint = Track::traceBackToClosestPoint(localPath.row(0), localPath.row(1), Eigen::RowVector2f::Zero(1,2))
+```
+
+```cpp
+Eigen::RowVector2f Track::traceBackToClosestPoint(Eigen::RowVector2f p1, Eigen::RowVector2f p2, Eigen::RowVector2f q)
+{
+   // Input: The coordinates of the first two points. (row vectors)
+   //        A reference point q (vehicle location)
+   // Output: the point along the line that is closest to the reference point.
+
+   Eigen::RowVector2f v = p1-p2;	// The line to trace
+   Eigen::RowVector2f n(1,2);	// The normal vector
+   n(0,0) = -v(0,1); n(0,1) = v(0,0);
+   //float d = (p1(0,0)*v(0,1)-v(0,0)*p1(0,1))/(n(0,0)*v(0,1)-v(0,0)*n(0,1)); // Shortest distance between [0,0] and the vector
+   float d = (v(0,1)*(p1(0,0)-q(0,0))+v(0,0)*(q(0,1)-p1(0,1)))/(n(0,0)*v(0,1)-v(0,0)*n(0,1)); // Shortest distance between q and the vector
+   return q+n*d;       // Follow the normal vector for that distance
+}
+```
 
 
