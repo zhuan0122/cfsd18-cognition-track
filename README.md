@@ -70,12 +70,14 @@
  // compare the pathlenth and previewDisatnce, if the preview distace is longer then the previewDistance is equal to pathlenth 
 ```
 ## sharp & steering  
- //  the bool variable m_sharp is set to decide which task is excuted, the sharo or the steering. and since it is set false, so it will excute driverModelSteering function, which returns a tuple consists headingRequest,distanceToAimPoint values, they are the azimuthAngle and distance of the aimpoint steer in action object. and the steer message will be sent with the m_senderstamp. 
+ //  the bool variable m_sharp is set to decide which task is excuted, the sharp or the steering. and since it is set false in the track.hpp.
+ 
+ so it will excute driverModelSteering function, which returns a tuple consists headingRequest,distanceToAimPoint variables, they are the values of azimuthAngle and distance of the aimpoint steer in action object. and the steer message will be sent with the m_senderstamp. 
  
  - azimuthAngle 
    ```
-   //Limit heading request due to physical limitations  and azimuthAngle is the Angle to aimpoint
-
+   // azimuthAngle is the Angle to aimpoint and it will be limitted by m_wheelAngleLimit, the physical limitations 
+  
    headingRequest = atan2f(aimPoint(1),aimPoint(0));
    if (headingRequest>=0) {
       headingRequest = std::min(headingRequest,m_wheelAngleLimit*3.14159265f/180.0f);
@@ -85,18 +87,20 @@
 
  - Aimpoint
 
-   // distanceToAimPoint is calculated by the aimpoint,coordinates value, aimpoint is decided by the pathlenth and previewDistance we also mentioned before, the previewDistance is float decided by the groundspeed and preciewtime of the vechicle
+   // distanceToAimPoint is calculated by the aimpoint coordinates value, aimpoint is decided by the pathlenth and previewDistance we also mentioned before, the previewDistance is the float value decided by the groundspeed and preciewtime of the vechicle
 
-   if the path lenth is longer than previewDistance and the local path points we colleted is more than 2, then the aimpoint will be placed after the first local path points element. path elements P1, P2 are the last two elements of the local path points, where P2 is the overshoot element since he path lenth is longer than previewDistance. 
-   
+   if the path lenth is longer than previewDistance and the local path points we colleted is more than 2, then the aimpoint will be placed after the first local path points element. and we will calculate the ampoint through the elements P1, P2. path elements P1, P2 are the last two elements of the local path points, where P2 is the overshoot element since he path lenth is longer than previewDistance. 
    and the aimpoints will be the line interpolation of the line between P1 P2 and the previewDistance line. 
 
    if  the path lenth is shorter  than previewDistance or the local path points we colleted is less than 2, then Place aimpoint on first path element
 
    If the path is too short, place aimpoint at the last path element
+
+   Thus the aimpoint is decided by the vehicle and local path 
    ```
 ## velocity control
- // the driverModelVelocity function returns a float varible accelerationRequest, when it is positive, it will be assigned to groundAcceleration object and the acceleration message with senderstamp  also will be sent through OD4Session.
+ // the driverModelVelocity function returns a float varible accelerationRequest.
+  when it is positive, it will be assigned to groundAcceleration object and the acceleration message with senderstamp  also will be sent through OD4Session.
  when the accelerationRequest is negative and then the minus accelerationRequest value will be assigned to groundDeceleration and the deceleration message will be sent with sender stamp.
 
    // variables involved: 
