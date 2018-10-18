@@ -99,12 +99,75 @@
  // the driverModelVelocity function returns a float varible accelerationRequest, when it is positive, it will be assigned to groundAcceleration object and the acceleration message with senderstamp  also will be sent through OD4Session.
  when the accelerationRequest is negative and then the minus accelerationRequest value will be assigned to groundDeceleration and the deceleration message will be sent with sender stamp.
 
-- acceleration 
+   // variables involved: 
+     groundspeed: normal running speed 
+     velocityLimit: the veichle limit velocity
+     axLimitPositive/axLimitNagative: max vertical acceleration and deacceleration value
+     ayLimit: lateral velocity limit
+     speedProfile: a vector storing velocity candidates based on expected lateral acceleration
+     curveRadii: a vector storing the return value of curvatureTriCircle function, which is used to calculate the curvature of path for some steps
+
+- !stop& the collecting points numbers in local path are more than 2 
   ```
+   // Caluclate curvature of path for setting step, makes sure that step is as big as possible (up to limit)
+
+    while (localPath.rows()-(2*step)<=0 && step > 0){ 
+          step--;
+        }
+        curveRadii = curvatureTriCircle(localPath,step);
+      }
+   // Segmentize the path and calculate radius of segments: Choose three points with max step and make a triangle with sides A(p1p2),B(p2p3),C(p1p3), also sort side lengths as A >= B && B >= C
+
+    for (int k = 0; k < localPath.rows()-(2*step); k++) {
+    
+    float A = (localPath.row(k+step)-localPath.row(k)).norm();
+    float B = (localPath.row(k+2*step)-localPath.row(k+step)).norm();
+    float C = (localPath.row(k+2*step)-localPath.row(k)).norm();
+    ...
+  
+   // then the variable velocity candidates speedProfile could be set for each curveRadii and the ayLimit and the velocity candidates speedProfile is used to check if the brake is needed and also set the brake time.
+   // tb is the time to decrease to velocity form the groundspeed to value for  the vechile specific wheel angle limit, if tb is bigger than 0, then the brake is needed.
+   // when we need to brake, we need to set the brake time for each velocity candidates(or each path segment)
+    
+    std::vector<float> distanceToCriticalPoint;
+    for (int k=0; k<step; k++){
+      s+=(localPath.row(k+1)-localPath.row(k)).norm();
+    }
+    for (i=0; i<speedProfile.size(); i++){
+      s+=(localPath.row(i+step+1)-localPath.row(i+step)).norm();
+      distanceToCriticalPoint.push_back(s);// assign s to push_back variable
+      tb = (speedProfile(i)-groundSpeedCopy)/(axLimitNegative);
+      tv = s/groundSpeedCopy; 
+      if (tb>0.0f) { 
+        tmp = tv-tb; too late
+        if(tmp<brakeTime){
+          brakeTime=tmp;
+          idx=i;
+        }
+      }
+      else {
+        if (speedProfile(i)<accPointMin) {
+          accPointMin = speedProfile(i);
+          accIdx = i;
+          ta = tv;
+        }
+      }
 
   ```
-- deacceleration
+- Stop 
+  
+  // if the bool variable stop is true then trigger brake to stop 
   ```
+    if(STOP){
+      if (std::abs(groundSpeedCopy) > 0.01f){
+       accelerationRequest = axLimitNegative;
+       std::cout << "BREAKING TO STOP " << std::endl;
+     }else {accelerationRequest = 0.0f;}
+  }
+  else{
+    accelerationRequest = 0.0f;// not brake no acceleration
+  }
+  return accelerationRequest;
 
   ```
 
